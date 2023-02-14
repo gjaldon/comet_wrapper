@@ -47,6 +47,7 @@ contract CometWrapper is ERC4626, CometMath {
         // Check for rounding error since we round down in previewDeposit.
         require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
 
+        accrueInternal();
         updateBasePrincipal(receiver, signed256(assets));
         // Need to transfer before minting or ERC777s could reenter.
         asset.safeTransferFrom(msg.sender, address(this), assets);
@@ -59,6 +60,7 @@ contract CometWrapper is ERC4626, CometMath {
     function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
         assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
 
+        accrueInternal();
         updateBasePrincipal(receiver, signed256(assets));
         // Need to transfer before minting or ERC777s could reenter.
         asset.safeTransferFrom(msg.sender, address(this), assets);
@@ -68,9 +70,57 @@ contract CometWrapper is ERC4626, CometMath {
         emit Deposit(msg.sender, receiver, assets, shares);
     }
 
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) public override returns (uint256 shares) {
+        shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
+
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        accrueInternal();
+        updateBasePrincipal(owner, -signed256(assets));
+
+
+        _burn(owner, shares);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) public override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        accrueInternal();
+        updateBasePrincipal(owner, -signed256(assets));
+
+        _burn(owner, shares);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
     function updateBasePrincipal(
         address account,
-        int256 changeToPrincipal
+        int256 balanceChange
     ) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
@@ -81,15 +131,29 @@ contract CometWrapper is ERC4626, CometMath {
         );
         basic.baseTrackingIndex = trackingSupplyIndex;
 
-        if (changeToPrincipal != 0) {
+        if (balanceChange != 0) {
             uint256 balance = unsigned256(
-                signed256(presentValueSupply(baseSupplyIndex, basic.principal)) + changeToPrincipal
+                signed256(presentValueSupply(baseSupplyIndex, basic.principal)) + balanceChange
             );
             basic.principal = principalValueSupply(baseSupplyIndex, balance);
-            underlyingPrincipal += basic.principal;
+        }
+
+        if (basic.principal > principal) {
+            underlyingPrincipal += basic.principal - principal;
+        } else {
+            underlyingPrincipal -= principal - basic.principal;
         }
 
         userBasic[account] = basic;
+    }
+
+    function accrueInternal() internal {
+        uint40 now_ = getNowInternal();
+        uint timeElapsed = uint256(now_ - lastAccrualTime);
+        if (timeElapsed > 0) {
+            comet.accrueAccount(address(this));
+            lastAccrualTime = now_;
+        }
     }
 
 
