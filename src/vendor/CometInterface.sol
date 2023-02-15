@@ -24,5 +24,6 @@ abstract contract CometInterface is CometMainInterface, CometExtInterface {
         uint128 totalSupplyAsset;
         uint128 _reserved;
     }
+
     function totalsCollateral(address) external virtual returns (TotalsCollateral memory);
 }

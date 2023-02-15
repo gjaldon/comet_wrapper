@@ -28,15 +28,11 @@ contract CometWrapper is ERC4626, CometMath {
     uint256 public underlyingPrincipal;
     CometInterface immutable comet;
 
-    constructor(
-        ERC20 _asset,
-        string memory _name,
-        string memory _symbol
-    ) ERC4626(_asset, _name, _symbol) {
+    constructor(ERC20 _asset, string memory _name, string memory _symbol) ERC4626(_asset, _name, _symbol) {
         comet = CometInterface(address(_asset));
         lastAccrualTime = getNowInternal();
     }
-    
+
     function totalAssets() public view override returns (uint256) {
         uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);
         uint256 principal = underlyingPrincipal;
@@ -70,11 +66,7 @@ contract CometWrapper is ERC4626, CometMath {
         emit Deposit(msg.sender, receiver, assets, shares);
     }
 
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address owner
-    ) public override returns (uint256 shares) {
+    function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
         shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
 
         if (msg.sender != owner) {
@@ -86,7 +78,6 @@ contract CometWrapper is ERC4626, CometMath {
         accrueInternal();
         updateBasePrincipal(owner, -signed256(assets));
 
-
         _burn(owner, shares);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
@@ -94,11 +85,7 @@ contract CometWrapper is ERC4626, CometMath {
         asset.safeTransfer(receiver, assets);
     }
 
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner
-    ) public override returns (uint256 assets) {
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
 
@@ -118,66 +105,59 @@ contract CometWrapper is ERC4626, CometMath {
         asset.safeTransfer(receiver, assets);
     }
 
-    function updateBasePrincipal(
-        address account,
-        int256 balanceChange
-    ) internal {
+    function updateBasePrincipal(address account, int256 balanceChange) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
         (uint64 baseSupplyIndex, uint64 trackingSupplyIndex) = getSupplyIndices();
         uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-        basic.baseTrackingAccrued += safe64(
-            (uint104(principal) * indexDelta) / TRACKING_INDEX_SCALE
-        );
+        basic.baseTrackingAccrued += safe64((uint104(principal) * indexDelta) / TRACKING_INDEX_SCALE);
         basic.baseTrackingIndex = trackingSupplyIndex;
 
         if (balanceChange != 0) {
-            uint256 balance = unsigned256(
-                signed256(presentValueSupply(baseSupplyIndex, basic.principal)) + balanceChange
-            );
-            basic.principal = principalValueSupply(baseSupplyIndex, balance);
-        }
-
-        if (basic.principal > principal) {
-            underlyingPrincipal += basic.principal - principal;
-        } else {
-            underlyingPrincipal -= principal - basic.principal;
+            basic.principal = updatedPrincipal(principal, baseSupplyIndex, balanceChange);
+            // Need to use the same method of updating wrapper's principal so that `totalAssets()`
+            // will match with `comet.balanceOf(wrapper)`
+            underlyingPrincipal = updatedPrincipal(underlyingPrincipal, baseSupplyIndex, balanceChange);
         }
 
         userBasic[account] = basic;
     }
 
+    function updatedPrincipal(uint256 principal, uint64 baseSupplyIndex, int256 balanceChange)
+        internal
+        pure
+        returns (uint104)
+    {
+        uint256 balance = unsigned256(signed256(presentValueSupply(baseSupplyIndex, principal)) + balanceChange);
+        return principalValueSupply(baseSupplyIndex, balance);
+    }
+
     function accrueInternal() internal {
         uint40 now_ = getNowInternal();
-        uint timeElapsed = uint256(now_ - lastAccrualTime);
+        uint256 timeElapsed = uint256(now_ - lastAccrualTime);
         if (timeElapsed > 0) {
             comet.accrueAccount(address(this));
             lastAccrualTime = now_;
         }
     }
 
-
-    function accruedSupplyIndex(uint timeElapsed) internal view returns (uint64) {
+    function accruedSupplyIndex(uint256 timeElapsed) internal view returns (uint64) {
         (uint64 baseSupplyIndex_,) = getSupplyIndices();
         if (timeElapsed > 0) {
-            uint utilization = comet.getUtilization();
-            uint supplyRate = comet.getSupplyRate(utilization);
+            uint256 utilization = comet.getUtilization();
+            uint256 supplyRate = comet.getSupplyRate(utilization);
             baseSupplyIndex_ += safe64(mulFactor(baseSupplyIndex_, supplyRate * timeElapsed));
         }
         return baseSupplyIndex_;
     }
 
-    function getSupplyIndices()
-        internal
-        view
-        returns (uint64 baseSupplyIndex_, uint64 trackingSupplyIndex_)
-    {
+    function getSupplyIndices() internal view returns (uint64 baseSupplyIndex_, uint64 trackingSupplyIndex_) {
         TotalsBasic memory totals = comet.totalsBasic();
         baseSupplyIndex_ = totals.baseSupplyIndex;
         trackingSupplyIndex_ = totals.trackingSupplyIndex;
     }
 
-    function mulFactor(uint n, uint factor) internal pure returns (uint) {
+    function mulFactor(uint256 n, uint256 factor) internal pure returns (uint256) {
         return n * factor / FACTOR_SCALE;
     }
 
@@ -191,8 +171,8 @@ contract CometWrapper is ERC4626, CometMath {
         return safe104((presentValue_ * BASE_INDEX_SCALE) / baseSupplyIndex_);
     }
 
-    function getNowInternal() virtual internal view returns (uint40) {
-        if (block.timestamp >= 2**40) revert TimestampTooLarge();
+    function getNowInternal() internal view virtual returns (uint40) {
+        if (block.timestamp >= 2 ** 40) revert TimestampTooLarge();
         return uint40(block.timestamp);
     }
 }

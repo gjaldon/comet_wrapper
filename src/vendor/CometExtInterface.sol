@@ -38,11 +38,7 @@ abstract contract CometExtInterface {
         bytes32 s
     ) external virtual;
 
-    function collateralBalanceOf(address account, address asset)
-        external
-        view
-        virtual
-        returns (uint128);
+    function collateralBalanceOf(address account, address asset) external view virtual returns (uint128);
 
     function baseTrackingAccrued(address account) external view virtual returns (uint64);
 
