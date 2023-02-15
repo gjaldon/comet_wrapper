@@ -6,7 +6,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {CometInterface, TotalsBasic} from "./vendor/CometInterface.sol";
 import {CometMath} from "./vendor/CometMath.sol";
-
+import {ICometRewards} from "./vendor/ICometRewards.sol";
+import "forge-std/console.sol";
 
 contract CometWrapper is ERC4626, CometMath {
     using SafeTransferLib for ERC20;
@@ -14,6 +15,7 @@ contract CometWrapper is ERC4626, CometMath {
     uint64 internal constant FACTOR_SCALE = 1e18;
     uint64 internal constant BASE_INDEX_SCALE = 1e15;
     uint256 constant TRACKING_INDEX_SCALE = 1e15;
+    uint64 constant RESCALE_FACTOR = 1e12;
 
     struct UserBasic {
         uint104 principal;
@@ -21,16 +23,28 @@ contract CometWrapper is ERC4626, CometMath {
         uint64 baseTrackingIndex;
     }
 
+    event RewardClaimed(address indexed src, address indexed recipient, address indexed token, uint256 amount);
+
     mapping(address => UserBasic) public userBasic;
     mapping(address => uint256) public rewardsClaimed;
 
     uint40 internal lastAccrualTime;
     uint256 public underlyingPrincipal;
     CometInterface immutable comet;
+    ERC20 public immutable rewardERC20;
+    ICometRewards public immutable cometRewards;
 
-    constructor(ERC20 _asset, string memory _name, string memory _symbol) ERC4626(_asset, _name, _symbol) {
+    constructor(
+        ERC20 _asset,
+        ERC20 _rewardERC20,
+        ICometRewards _cometRewards,
+        string memory _name,
+        string memory _symbol
+    ) ERC4626(_asset, _name, _symbol) {
         comet = CometInterface(address(_asset));
         lastAccrualTime = getNowInternal();
+        rewardERC20 = _rewardERC20;
+        cometRewards = _cometRewards;
     }
 
     function totalAssets() public view override returns (uint256) {
@@ -110,11 +124,7 @@ contract CometWrapper is ERC4626, CometMath {
         return true;
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         uint256 allowed = msg.sender == from ? type(uint256).max : allowance[from][msg.sender]; // Saves gas for limited approvals.
 
         if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
@@ -146,19 +156,15 @@ contract CometWrapper is ERC4626, CometMath {
     function updatePrincipals(address account, int256 balanceChange) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
-        (uint64 baseSupplyIndex, uint64 trackingSupplyIndex) = getSupplyIndices();
-        uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-        basic.baseTrackingAccrued += safe64((uint104(principal) * indexDelta) / TRACKING_INDEX_SCALE);
-        basic.baseTrackingIndex = trackingSupplyIndex;
+        (uint64 baseSupplyIndex,) = getSupplyIndices();
 
         if (balanceChange != 0) {
             basic.principal = updatedPrincipal(principal, baseSupplyIndex, balanceChange);
+            userBasic[account] = basic;
             // Need to use the same method of updating wrapper's principal so that `totalAssets()`
             // will match with `comet.balanceOf(wrapper)`
             underlyingPrincipal = updatedPrincipal(underlyingPrincipal, baseSupplyIndex, balanceChange);
         }
-
-        userBasic[account] = basic;
     }
 
     function updateTransferPrincipals(address from, address to, uint256 shares) internal {
@@ -185,6 +191,45 @@ contract CometWrapper is ERC4626, CometMath {
             comet.accrueAccount(address(this));
             lastAccrualTime = now_;
         }
+    }
+
+    function getRewardOwed(address account) external returns (uint256) {
+        UserBasic memory basic = accrueRewards(account);
+        uint256 claimed = rewardsClaimed[account];
+        uint256 accrued = basic.baseTrackingAccrued * RESCALE_FACTOR;
+        uint256 owed = accrued > claimed ? accrued - claimed : 0;
+
+        return owed;
+    }
+
+    function claimTo(address to) external {
+        address from = msg.sender;
+        UserBasic memory basic = accrueRewards(from);
+
+        uint256 claimed = rewardsClaimed[from];
+        uint256 accrued = basic.baseTrackingAccrued * RESCALE_FACTOR;
+
+        if (accrued > claimed) {
+            uint256 owed = accrued - claimed;
+            rewardsClaimed[from] = accrued;
+
+            emit RewardClaimed(from, to, address(rewardERC20), owed);
+            cometRewards.claimTo(address(comet), address(this), address(this), true);
+            rewardERC20.safeTransfer(to, owed);
+        }
+    }
+
+    function accrueRewards(address account) public returns (UserBasic memory) {
+        UserBasic memory basic = userBasic[account];
+        comet.accrueAccount(address(this));
+
+        (, uint64 trackingSupplyIndex) = getSupplyIndices();
+        uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
+        basic.baseTrackingAccrued += safe64((uint104(basic.principal) * indexDelta) / TRACKING_INDEX_SCALE);
+        basic.baseTrackingIndex = trackingSupplyIndex;
+        userBasic[account] = basic;
+
+        return basic;
     }
 
     function accruedSupplyIndex(uint256 timeElapsed) internal view returns (uint64) {
