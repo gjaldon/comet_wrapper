@@ -1,0 +1,7 @@
+{
+  "solidity.formatter": "forge",
+  "solidity.packageDefaultDependenciesDirectory": "lib",
+  "solidity.packageDefaultDependenciesContractsDirectory": "src",
+  "diffEditor.ignoreTrimWhitespace": false,
+  "editor.trimAutoWhitespace": true
+}
