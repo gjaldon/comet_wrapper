@@ -44,7 +44,7 @@ contract CometWrapper is ERC4626, CometMath {
         require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
 
         accrueInternal();
-        updateBasePrincipal(receiver, signed256(assets));
+        updatePrincipals(receiver, signed256(assets));
         // Need to transfer before minting or ERC777s could reenter.
         asset.safeTransferFrom(msg.sender, address(this), assets);
 
@@ -57,7 +57,7 @@ contract CometWrapper is ERC4626, CometMath {
         assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
 
         accrueInternal();
-        updateBasePrincipal(receiver, signed256(assets));
+        updatePrincipals(receiver, signed256(assets));
         // Need to transfer before minting or ERC777s could reenter.
         asset.safeTransferFrom(msg.sender, address(this), assets);
 
@@ -76,7 +76,7 @@ contract CometWrapper is ERC4626, CometMath {
         }
 
         accrueInternal();
-        updateBasePrincipal(owner, -signed256(assets));
+        updatePrincipals(owner, -signed256(assets));
 
         _burn(owner, shares);
 
@@ -96,7 +96,7 @@ contract CometWrapper is ERC4626, CometMath {
         require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
 
         accrueInternal();
-        updateBasePrincipal(owner, -signed256(assets));
+        updatePrincipals(owner, -signed256(assets));
 
         _burn(owner, shares);
 
@@ -105,7 +105,45 @@ contract CometWrapper is ERC4626, CometMath {
         asset.safeTransfer(receiver, assets);
     }
 
-    function updateBasePrincipal(address account, int256 balanceChange) internal {
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        transferInternal(msg.sender, to, amount);
+        return true;
+    }
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public override returns (bool) {
+        uint256 allowed = msg.sender == from ? type(uint256).max : allowance[from][msg.sender]; // Saves gas for limited approvals.
+
+        if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
+
+        transferInternal(from, to, amount);
+        return true;
+    }
+
+    function transferInternal(address from, address to, uint256 amount) internal {
+        balanceOf[from] -= amount;
+
+        updateTransferPrincipals(from, to, amount);
+
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
+        unchecked {
+            balanceOf[to] += amount;
+        }
+
+        emit Transfer(from, to, amount);
+    }
+
+    function underlyingBalance(address account) public view returns (uint256) {
+        uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);
+        uint256 principal = userBasic[account].principal;
+        return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
+    }
+
+    function updatePrincipals(address account, int256 balanceChange) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
         (uint64 baseSupplyIndex, uint64 trackingSupplyIndex) = getSupplyIndices();
@@ -123,13 +161,21 @@ contract CometWrapper is ERC4626, CometMath {
         userBasic[account] = basic;
     }
 
+    function updateTransferPrincipals(address from, address to, uint256 shares) internal {
+        uint256 _totalAssets = totalAssets();
+        uint256 assets = convertToAssets(shares);
+        uint104 principalChange = safe104(assets * underlyingPrincipal / _totalAssets);
+        userBasic[from].principal -= principalChange;
+        userBasic[to].principal += principalChange;
+    }
+
     function updatedPrincipal(uint256 principal, uint64 baseSupplyIndex, int256 balanceChange)
         internal
         pure
         returns (uint104)
     {
-        uint256 balance = unsigned256(signed256(presentValueSupply(baseSupplyIndex, principal)) + balanceChange);
-        return principalValueSupply(baseSupplyIndex, balance);
+        int256 balance = signed256(presentValueSupply(baseSupplyIndex, principal)) + balanceChange;
+        return principalValueSupply(baseSupplyIndex, unsigned256(balance));
     }
 
     function accrueInternal() internal {

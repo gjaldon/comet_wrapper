@@ -173,4 +173,37 @@ contract CometWrapperTest is Test {
         cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
         vm.stopPrank();
     }
+
+    function test__transfer() public {
+        vm.startPrank(alice);
+        comet.allow(address(cometWrapper), true);
+        cometWrapper.mint(9_000e6, alice);
+        cometWrapper.transferFrom(alice, bob, 1_337e6);
+        vm.stopPrank();
+
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        vm.warp(block.timestamp + 30 days);
+
+        vm.startPrank(bob);
+        comet.allow(address(cometWrapper), true);
+        cometWrapper.transfer(alice, 777e6);
+        cometWrapper.transfer(alice, 111e6);
+        cometWrapper.transfer(alice, 99e6);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 30 days);
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+
+        assertEq(cometWrapper.underlyingBalance(alice), cometWrapper.maxWithdraw(alice));
+
+        vm.startPrank(alice);
+        cometWrapper.withdraw(cometWrapper.maxWithdraw(alice), alice, alice);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
+        vm.stopPrank();
+
+        assertEq(cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob), cometWrapper.totalAssets());
+    }
 }
