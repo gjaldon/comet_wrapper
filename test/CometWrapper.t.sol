@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import {BaseTest, CometHelpers} from "./BaseTest.sol";
+import {BaseTest, CometHelpers, CometWrapper, ERC20, ICometRewards} from "./BaseTest.sol";
 
 contract CometWrapperTest is BaseTest {
     function setUp() public override {
@@ -20,11 +20,35 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.trackingIndexScale(), comet.trackingIndexScale());
         assertEq(cometWrapper.underlyingPrincipal(), 0);
         assertEq(address(cometWrapper.comet()), address(comet));
-        assertEq(address(cometWrapper.cometRewards()), address(cometReward));
+        assertEq(address(cometWrapper.cometRewards()), address(cometRewards));
         assertEq(address(cometWrapper.asset()), address(comet));
         assertEq(cometWrapper.decimals(), comet.decimals());
-        assertEq(cometWrapper.name(), "Comet USDC");
-        assertEq(cometWrapper.symbol(), "cUSDCv3");
+        assertEq(cometWrapper.name(), "Wrapped Comet USDC");
+        assertEq(cometWrapper.symbol(), "WcUSDCv3");
+    }
+
+    function test__constructorRevertsOnInvalidComet() public {
+        // reverts on zero address
+        vm.expectRevert();
+        new CometWrapper(ERC20(address(0)), cometRewards, "Name", "Symbol");
+
+        // reverts on non-zero address that isn't ERC20 and Comet
+        vm.expectRevert();
+        new CometWrapper(ERC20(address(1)), cometRewards, "Name", "Symbol");
+
+        // reverts on ERC20-only contract
+        vm.expectRevert();
+        new CometWrapper(usdc, cometRewards, "Name", "Symbol");
+    }
+
+    function test__constructorRevertsOnInvalidCometRewards() public {
+        // reverts on zero address
+        vm.expectRevert(CometHelpers.ZeroAddress.selector);
+        new CometWrapper(ERC20(address(comet)), ICometRewards(address(0)), "Name", "Symbol");
+
+        // reverts on non-zero address that isn't CometRewards
+        vm.expectRevert();
+        new CometWrapper(ERC20(address(comet)), ICometRewards(address(1)), "Name", "Symbol");
     }
 
     function test__totalAssets() public {

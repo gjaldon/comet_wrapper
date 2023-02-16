@@ -35,20 +35,20 @@ contract RewardsTest is BaseTest {
 
         // Rewards accrual will not be applied retroactively
         assertEq(cometWrapper.getRewardOwed(alice), 0);
-        assertEq(cometWrapper.getRewardOwed(alice), cometReward.getRewardOwed(cometAddress, alice).owed);
+        assertEq(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed);
 
         vm.warp(block.timestamp + 7 days);
 
         // Rewards accrual in CometWrapper matches rewards accrual in Comet
         assertGt(cometWrapper.getRewardOwed(alice), 0);
-        assertEq(cometWrapper.getRewardOwed(alice), cometReward.getRewardOwed(cometAddress, alice).owed);
+        assertEq(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed);
 
         assertGt(cometWrapper.getRewardOwed(bob), 0);
-        assertEq(cometWrapper.getRewardOwed(bob), cometReward.getRewardOwed(cometAddress, bob).owed);
+        assertEq(cometWrapper.getRewardOwed(bob), cometRewards.getRewardOwed(cometAddress, bob).owed);
 
         assertEq(
             cometWrapper.getRewardOwed(bob) + cometWrapper.getRewardOwed(alice) + 1e12,
-            cometReward.getRewardOwed(cometAddress, wrapperAddress).owed
+            cometRewards.getRewardOwed(cometAddress, wrapperAddress).owed
         );
     }
 
@@ -74,25 +74,25 @@ contract RewardsTest is BaseTest {
         skip(30 days);
 
         // Accrued rewards in CometWrapper matches accrued rewards in Comet
-        uint256 cometRewards;
+        uint256 rewardsFromComet;
         uint256 wrapperRewards;
         vm.startPrank(alice);
-        cometReward.claim(cometAddress, alice, true);
-        cometRewards = comp.balanceOf(alice);
+        cometRewards.claim(cometAddress, alice, true);
+        rewardsFromComet = comp.balanceOf(alice);
         cometWrapper.claimTo(alice);
-        wrapperRewards = comp.balanceOf(alice) - cometRewards;
+        wrapperRewards = comp.balanceOf(alice) - rewardsFromComet;
         vm.stopPrank();
 
-        assertEq(wrapperRewards, cometRewards);
+        assertEq(wrapperRewards, rewardsFromComet);
 
         vm.startPrank(bob);
-        cometReward.claim(cometAddress, bob, true);
-        cometRewards = comp.balanceOf(bob);
+        cometRewards.claim(cometAddress, bob, true);
+        rewardsFromComet = comp.balanceOf(bob);
         cometWrapper.claimTo(bob);
-        wrapperRewards = comp.balanceOf(bob) - cometRewards;
+        wrapperRewards = comp.balanceOf(bob) - rewardsFromComet;
         vm.stopPrank();
 
-        assertEq(wrapperRewards, cometRewards);
+        assertEq(wrapperRewards, rewardsFromComet);
 
         // After all rewards are claimed, contract must have either 0 or negligible dust left
         assertLe(comp.balanceOf(wrapperAddress), 1e12);

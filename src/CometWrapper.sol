@@ -30,8 +30,9 @@ contract CometWrapper is ERC4626, CometHelpers {
     constructor(ERC20 _asset, ICometRewards _cometRewards, string memory _name, string memory _symbol)
         ERC4626(_asset, _name, _symbol)
     {
-        if (address(_asset) == address(0)) revert ZeroAddress();
         if (address(_cometRewards) == address(0)) revert ZeroAddress();
+        // minimal validation that contract is CometRewards
+        _cometRewards.rewardConfig(address(_asset));
 
         comet = CometInterface(address(_asset));
         lastAccrualTime = getNowInternal();
