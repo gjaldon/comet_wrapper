@@ -26,7 +26,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
-        vm.warp(block.timestamp + 14 days);
+        skip(14 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
 
         vm.startPrank(bob);
@@ -35,7 +35,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
-        vm.warp(block.timestamp + 14 days);
+        skip(14 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
     }
 
@@ -49,7 +49,7 @@ contract CometWrapperTest is BaseTest {
         // Account for rounding errors that lead to difference of 1
         assertEq(cometWrapper.maxWithdraw(alice) - 1, comet.balanceOf(alice));
 
-        vm.warp(block.timestamp + 14 days);
+        skip(14 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
         // Account for rounding errors that lead to difference of 1
         assertEq(cometWrapper.maxWithdraw(alice) - 1, comet.balanceOf(alice));
@@ -78,14 +78,14 @@ contract CometWrapperTest is BaseTest {
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
 
-        vm.warp(block.timestamp + 14 days);
+        skip(14 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
 
         vm.prank(alice);
         cometWrapper.withdraw(173e6, alice, alice);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
 
-        vm.warp(block.timestamp + 500 days);
+        skip(500 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
 
         uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
@@ -143,7 +143,7 @@ contract CometWrapperTest is BaseTest {
         uint256 totalRedeems = cometWrapper.maxRedeem(alice) + cometWrapper.maxRedeem(bob);
         assertEq(totalRedeems, cometWrapper.totalSupply());
 
-        vm.warp(block.timestamp + 500 days);
+        skip(500 days);
 
         // All users can fully redeem shares
         vm.startPrank(alice);
@@ -162,7 +162,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
-        vm.warp(block.timestamp + 30 days);
+        skip(30 days);
 
         vm.startPrank(bob);
         comet.allow(address(cometWrapper), true);
@@ -171,7 +171,7 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.transfer(alice, 99e6);
         vm.stopPrank();
 
-        vm.warp(block.timestamp + 30 days);
+        skip(30 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
 
         assertEq(cometWrapper.underlyingBalance(alice), cometWrapper.maxWithdraw(alice));
