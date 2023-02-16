@@ -12,6 +12,7 @@ contract RewardsTest is BaseTest {
     function test__getRewardOwed() public {
         enableRewardsAccrual();
 
+        // Alice and Bob have same amount of funds in both CometWrapper and Comet
         vm.startPrank(cusdcHolder);
         comet.transfer(alice, 10_000e6);
         comet.transfer(bob, 10_000e6);
@@ -49,6 +50,52 @@ contract RewardsTest is BaseTest {
             cometWrapper.getRewardOwed(bob) + cometWrapper.getRewardOwed(alice) + 1e12,
             cometReward.getRewardOwed(cometAddress, address(cometWrapper)).owed
         );
+    }
+
+    function test__claimTo() public {
+        enableRewardsAccrual();
+
+        // Alice and Bob have same amount of funds in both CometWrapper and Comet
+        vm.startPrank(cusdcHolder);
+        comet.transfer(alice, 10_000e6);
+        comet.transfer(bob, 10_000e6);
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        comet.allow(address(cometWrapper), true);
+        cometWrapper.deposit(5_000e6, alice);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        comet.allow(address(cometWrapper), true);
+        cometWrapper.deposit(5_000e6, bob);
+        vm.stopPrank();
+
+        skip(30 days);
+
+        // Accrued rewards in CometWrapper matches accrued rewards in Comet
+        uint256 cometRewards;
+        uint256 wrapperRewards;
+        vm.startPrank(alice);
+        cometReward.claim(cometAddress, alice, true);
+        cometRewards = comp.balanceOf(alice);
+        cometWrapper.claimTo(alice);
+        wrapperRewards = comp.balanceOf(alice) - cometRewards;
+        vm.stopPrank();
+        
+        assertEq(wrapperRewards, cometRewards);
+
+        vm.startPrank(bob);
+        cometReward.claim(cometAddress, bob, true);
+        cometRewards = comp.balanceOf(bob);
+        cometWrapper.claimTo(bob);
+        wrapperRewards = comp.balanceOf(bob) - cometRewards;
+        vm.stopPrank();
+
+        assertEq(wrapperRewards, cometRewards);
+
+        // After all rewards are claimed, contract must have either 0 or negligible dust left
+        assertLe(comp.balanceOf(address(cometWrapper)), 1e12);
     }
 
     function enableRewardsAccrual() internal {

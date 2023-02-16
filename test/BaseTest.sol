@@ -16,6 +16,7 @@ contract BaseTest is Test {
     CometInterface public comet;
     ICometRewards public cometReward;
     ERC20 public usdc;
+    ERC20 public comp;
 
     address alice = address(0xABCD);
     address bob = address(0xDCBA);
@@ -26,6 +27,7 @@ contract BaseTest is Test {
         vm.createSelectFork(vm.rpcUrl("mainnet"), 16617900);
 
         usdc = ERC20(usdcAddress);
+        comp = ERC20(compAddress);
         comet = CometInterface(cometAddress);
         cometReward = ICometRewards(rewardAddress);
         cometWrapper =
