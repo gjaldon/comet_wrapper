@@ -14,7 +14,7 @@ contract CometWrapper is ERC4626, CometMath {
 
     uint64 internal constant FACTOR_SCALE = 1e18;
     uint64 internal constant BASE_INDEX_SCALE = 1e15;
-    uint256 constant TRACKING_INDEX_SCALE = 1e15;
+    uint64 internal constant BASE_ACCRUAL_SCALE = 1e6;
 
     struct UserBasic {
         uint104 principal;
@@ -25,8 +25,9 @@ contract CometWrapper is ERC4626, CometMath {
     error LackAllowance();
     error ZeroShares();
     error ZeroAssets();
+    error ZeroAddress();
     error TimestampTooLarge();
-    
+
     event RewardClaimed(address indexed src, address indexed recipient, address indexed token, uint256 amount);
 
     mapping(address => UserBasic) public userBasic;
@@ -35,20 +36,21 @@ contract CometWrapper is ERC4626, CometMath {
     uint40 internal lastAccrualTime;
     uint256 public underlyingPrincipal;
     CometInterface immutable comet;
-    ERC20 public immutable rewardERC20;
     ICometRewards public immutable cometRewards;
+    uint256 internal immutable accrualDescaleFactor;
+    uint256 public immutable trackingIndexScale;
 
-    constructor(
-        ERC20 _asset,
-        ERC20 _rewardERC20,
-        ICometRewards _cometRewards,
-        string memory _name,
-        string memory _symbol
-    ) ERC4626(_asset, _name, _symbol) {
+    constructor(ERC20 _asset, ICometRewards _cometRewards, string memory _name, string memory _symbol)
+        ERC4626(_asset, _name, _symbol)
+    {
+        if (address(_asset) == address(0)) revert ZeroAddress();
+        if (address(_cometRewards) == address(0)) revert ZeroAddress();
+
         comet = CometInterface(address(_asset));
         lastAccrualTime = getNowInternal();
-        rewardERC20 = _rewardERC20;
         cometRewards = _cometRewards;
+        trackingIndexScale = comet.trackingIndexScale();
+        accrualDescaleFactor = uint64(10 ** asset.decimals()) / BASE_ACCRUAL_SCALE;
     }
 
     function totalAssets() public view override returns (uint256) {
@@ -163,7 +165,7 @@ contract CometWrapper is ERC4626, CometMath {
 
         if (principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-            basic.baseTrackingAccrued += safe64(uint104(principal) * indexDelta / TRACKING_INDEX_SCALE);
+            basic.baseTrackingAccrued += safe64(uint104(principal) * indexDelta / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
 
@@ -238,9 +240,9 @@ contract CometWrapper is ERC4626, CometMath {
             uint256 owed = accrued - claimed;
             rewardsClaimed[from] = accrued;
 
-            emit RewardClaimed(from, to, address(rewardERC20), owed);
+            emit RewardClaimed(from, to, config.token, owed);
             cometRewards.claimTo(address(comet), address(this), address(this), true);
-            rewardERC20.safeTransfer(to, owed);
+            ERC20(config.token).safeTransfer(to, owed);
         }
     }
 
@@ -251,7 +253,7 @@ contract CometWrapper is ERC4626, CometMath {
 
         if (basic.principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-            basic.baseTrackingAccrued += safe64((uint104(basic.principal) * indexDelta) / TRACKING_INDEX_SCALE);
+            basic.baseTrackingAccrued += safe64((uint104(basic.principal) * indexDelta) / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;

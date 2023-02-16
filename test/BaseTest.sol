@@ -31,8 +31,7 @@ contract BaseTest is Test {
         comp = ERC20(compAddress);
         comet = CometInterface(cometAddress);
         cometReward = ICometRewards(rewardAddress);
-        cometWrapper =
-        new CometWrapper(ERC20(cometAddress),ERC20(compAddress),ICometRewards(rewardAddress), "Comet USDC", "cUSDCv3");
+        cometWrapper = new CometWrapper(ERC20(cometAddress), ICometRewards(rewardAddress), "Comet USDC", "cUSDCv3");
         wrapperAddress = address(cometWrapper);
     }
 }

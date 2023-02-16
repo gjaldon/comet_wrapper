@@ -82,7 +82,7 @@ contract RewardsTest is BaseTest {
         cometWrapper.claimTo(alice);
         wrapperRewards = comp.balanceOf(alice) - cometRewards;
         vm.stopPrank();
-        
+
         assertEq(wrapperRewards, cometRewards);
 
         vm.startPrank(bob);
