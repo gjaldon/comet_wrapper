@@ -36,7 +36,26 @@ contract CometWrapperTest is BaseTest {
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(14 days);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
+    }
+
+    function test__nullifyInflationAttacks() public {
+        assertEq(cometWrapper.totalAssets(), 0);
+
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.deposit(5_000e6, alice);
+        vm.stopPrank();
+
+        uint256 oldTotalAssets = cometWrapper.totalAssets();
+        assertEq(oldTotalAssets, comet.balanceOf(wrapperAddress));
+
+        // totalAssets can not be manipulated, effectively nullifying inflation attacks
+        vm.prank(bob);
+        comet.transfer(wrapperAddress, 5_000e6);
+        // totalAssets does not change when doing a direct transfer
+        assertEq(cometWrapper.totalAssets(), oldTotalAssets);
+        assertLt(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
     }
 
     function test__deposit() public {
