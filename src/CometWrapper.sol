@@ -5,30 +5,17 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {CometInterface, TotalsBasic} from "./vendor/CometInterface.sol";
-import {CometMath} from "./vendor/CometMath.sol";
+import {CometHelpers} from "./CometHelpers.sol";
 import {ICometRewards} from "./vendor/ICometRewards.sol";
-import "forge-std/console.sol";
 
-contract CometWrapper is ERC4626, CometMath {
+contract CometWrapper is ERC4626, CometHelpers {
     using SafeTransferLib for ERC20;
-
-    uint64 internal constant FACTOR_SCALE = 1e18;
-    uint64 internal constant BASE_INDEX_SCALE = 1e15;
-    uint64 internal constant BASE_ACCRUAL_SCALE = 1e6;
 
     struct UserBasic {
         uint104 principal;
         uint64 baseTrackingAccrued;
         uint64 baseTrackingIndex;
     }
-
-    error LackAllowance();
-    error ZeroShares();
-    error ZeroAssets();
-    error ZeroAddress();
-    error TimestampTooLarge();
-
-    event RewardClaimed(address indexed src, address indexed recipient, address indexed token, uint256 amount);
 
     mapping(address => UserBasic) public userBasic;
     mapping(address => uint256) public rewardsClaimed;
@@ -165,7 +152,8 @@ contract CometWrapper is ERC4626, CometMath {
 
         if (principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-            basic.baseTrackingAccrued += safe64(uint104(principal) * indexDelta / trackingIndexScale / accrualDescaleFactor);
+            basic.baseTrackingAccrued +=
+                safe64(uint104(principal) * indexDelta / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
 
@@ -253,7 +241,8 @@ contract CometWrapper is ERC4626, CometMath {
 
         if (basic.principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-            basic.baseTrackingAccrued += safe64((uint104(basic.principal) * indexDelta) / trackingIndexScale / accrualDescaleFactor);
+            basic.baseTrackingAccrued +=
+                safe64((uint104(basic.principal) * indexDelta) / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;
@@ -275,22 +264,5 @@ contract CometWrapper is ERC4626, CometMath {
         TotalsBasic memory totals = comet.totalsBasic();
         baseSupplyIndex_ = totals.baseSupplyIndex;
         trackingSupplyIndex_ = totals.trackingSupplyIndex;
-    }
-
-    function mulFactor(uint256 n, uint256 factor) internal pure returns (uint256) {
-        return n * factor / FACTOR_SCALE;
-    }
-
-    function presentValueSupply(uint64 baseSupplyIndex_, uint256 principalValue_) internal pure returns (uint256) {
-        return principalValue_ * baseSupplyIndex_ / BASE_INDEX_SCALE;
-    }
-
-    function principalValueSupply(uint64 baseSupplyIndex_, uint256 presentValue_) internal pure returns (uint104) {
-        return safe104((presentValue_ * BASE_INDEX_SCALE) / baseSupplyIndex_);
-    }
-
-    function getNowInternal() internal view virtual returns (uint40) {
-        if (block.timestamp >= 2 ** 40) revert TimestampTooLarge();
-        return uint40(block.timestamp);
     }
 }

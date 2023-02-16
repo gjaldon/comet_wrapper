@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import {BaseTest, CometWrapper} from "./BaseTest.sol";
-import "forge-std/console.sol";
+import {BaseTest, CometHelpers} from "./BaseTest.sol";
 
 contract CometWrapperTest is BaseTest {
     function setUp() public override {
@@ -15,6 +14,10 @@ contract CometWrapperTest is BaseTest {
         vm.prank(cusdcHolder);
         comet.transfer(bob, 10_000e6);
         assertGt(comet.balanceOf(bob), 999e6);
+    }
+
+    function test__consructor() public {
+        assertEq(cometWrapper.trackingIndexScale(), comet.trackingIndexScale());
     }
 
     function test__totalAssets() public {
@@ -213,7 +216,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         vm.startPrank(bob);
-        vm.expectRevert(CometWrapper.LackAllowance.selector);
+        vm.expectRevert(CometHelpers.LackAllowance.selector);
         cometWrapper.transferFrom(alice, bob, 900e6);
         vm.stopPrank();
 
