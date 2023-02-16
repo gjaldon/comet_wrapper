@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import {BaseTest} from "./BaseTest.sol";
+import {BaseTest, CometWrapper} from "./BaseTest.sol";
 import "forge-std/console.sol";
 
 contract CometWrapperTest is BaseTest {
@@ -204,5 +204,29 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob), cometWrapper.totalAssets());
+    }
+
+    function test__transferFromRevertsOnLackingAllowance() public {
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.deposit(1_000e6, alice);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        vm.expectRevert(CometWrapper.LackAllowance.selector);
+        cometWrapper.transferFrom(alice, bob, 900e6);
+        vm.stopPrank();
+
+        vm.prank(alice);
+        cometWrapper.approve(bob, 4_000e6);
+
+        vm.startPrank(bob);
+        vm.expectRevert();
+        cometWrapper.transferFrom(alice, bob, 2_000e6);
+        cometWrapper.transferFrom(alice, bob, 900e6);
+        vm.expectRevert();
+        cometWrapper.transferFrom(alice, bob, 3_000e6);
+        assertEq(cometWrapper.balanceOf(bob), 900e6);
+        vm.stopPrank();
     }
 }

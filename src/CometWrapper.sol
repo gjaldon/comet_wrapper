@@ -22,6 +22,7 @@ contract CometWrapper is ERC4626, CometMath {
         uint64 baseTrackingIndex;
     }
 
+    error LackAllowance();
     event RewardClaimed(address indexed src, address indexed recipient, address indexed token, uint256 amount);
 
     mapping(address => UserBasic) public userBasic;
@@ -126,6 +127,7 @@ contract CometWrapper is ERC4626, CometMath {
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         uint256 allowed = msg.sender == from ? type(uint256).max : allowance[from][msg.sender]; // Saves gas for limited approvals.
 
+        if (allowed < amount) revert LackAllowance();
         if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
 
         transferInternal(from, to, amount);
