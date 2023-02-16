@@ -17,6 +17,7 @@ contract BaseTest is Test {
     ICometRewards public cometReward;
     ERC20 public usdc;
     ERC20 public comp;
+    address public wrapperAddress;
 
     address alice = address(0xABCD);
     address bob = address(0xDCBA);
@@ -32,5 +33,6 @@ contract BaseTest is Test {
         cometReward = ICometRewards(rewardAddress);
         cometWrapper =
         new CometWrapper(ERC20(cometAddress),ERC20(compAddress),ICometRewards(rewardAddress), "Comet USDC", "cUSDCv3");
+        wrapperAddress = address(cometWrapper);
     }
 }

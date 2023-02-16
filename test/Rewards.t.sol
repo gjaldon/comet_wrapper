@@ -19,17 +19,17 @@ contract RewardsTest is BaseTest {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, bob);
         vm.stopPrank();
 
         // Assets in CometWrapper should match Comet balance or at least be less by only 1 due to rounding
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         assertEq(cometWrapper.underlyingBalance(alice) - 1, comet.balanceOf(alice));
         assertEq(cometWrapper.underlyingBalance(bob) - 1, comet.balanceOf(bob));
 
@@ -48,7 +48,7 @@ contract RewardsTest is BaseTest {
 
         assertEq(
             cometWrapper.getRewardOwed(bob) + cometWrapper.getRewardOwed(alice) + 1e12,
-            cometReward.getRewardOwed(cometAddress, address(cometWrapper)).owed
+            cometReward.getRewardOwed(cometAddress, wrapperAddress).owed
         );
     }
 
@@ -62,12 +62,12 @@ contract RewardsTest is BaseTest {
         vm.stopPrank();
 
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, bob);
         vm.stopPrank();
 
@@ -95,7 +95,7 @@ contract RewardsTest is BaseTest {
         assertEq(wrapperRewards, cometRewards);
 
         // After all rewards are claimed, contract must have either 0 or negligible dust left
-        assertLe(comp.balanceOf(address(cometWrapper)), 1e12);
+        assertLe(comp.balanceOf(wrapperAddress), 1e12);
     }
 
     function enableRewardsAccrual() internal {

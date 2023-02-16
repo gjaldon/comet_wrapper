@@ -21,45 +21,45 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.totalAssets(), 0);
 
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, alice);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(14 days);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, bob);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(14 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
     }
 
     function test__deposit() public {
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(5_000e6, alice);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         // Account for rounding errors that lead to difference of 1
         assertEq(cometWrapper.maxWithdraw(alice) - 1, comet.balanceOf(alice));
 
         skip(14 days);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         // Account for rounding errors that lead to difference of 1
         assertEq(cometWrapper.maxWithdraw(alice) - 1, comet.balanceOf(alice));
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(7_777e6, bob);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
         // Alice and Bob should be able to withdraw all their assets without issue
         assertLe(totalAssets, cometWrapper.totalAssets());
@@ -67,26 +67,26 @@ contract CometWrapperTest is BaseTest {
 
     function test__withdraw() public {
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(9_101e6, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.deposit(2_555e6, bob);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         skip(14 days);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         vm.prank(alice);
         cometWrapper.withdraw(173e6, alice, alice);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         skip(500 days);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
         assertLe(totalAssets, cometWrapper.totalAssets());
@@ -106,20 +106,20 @@ contract CometWrapperTest is BaseTest {
 
     function test__mint() public {
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.mint(9_000e6, alice);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         assertEq(cometWrapper.balanceOf(alice), 9_000e6);
         assertEq(cometWrapper.maxRedeem(alice), cometWrapper.balanceOf(alice));
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.mint(7_777e6, bob);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         assertEq(cometWrapper.balanceOf(bob), 7_777e6);
         assertEq(cometWrapper.maxRedeem(bob), cometWrapper.balanceOf(bob));
 
@@ -129,16 +129,16 @@ contract CometWrapperTest is BaseTest {
 
     function test__redeem() public {
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.mint(9_000e6, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.mint(7_777e6, bob);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         uint256 totalRedeems = cometWrapper.maxRedeem(alice) + cometWrapper.maxRedeem(bob);
         assertEq(totalRedeems, cometWrapper.totalSupply());
@@ -156,23 +156,23 @@ contract CometWrapperTest is BaseTest {
 
     function test__transfer() public {
         vm.startPrank(alice);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.mint(9_000e6, alice);
         cometWrapper.transferFrom(alice, bob, 1_337e6);
         vm.stopPrank();
 
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(30 days);
 
         vm.startPrank(bob);
-        comet.allow(address(cometWrapper), true);
+        comet.allow(wrapperAddress, true);
         cometWrapper.transfer(alice, 777e6);
         cometWrapper.transfer(alice, 111e6);
         cometWrapper.transfer(alice, 99e6);
         vm.stopPrank();
 
         skip(30 days);
-        assertEq(cometWrapper.totalAssets(), comet.balanceOf(address(cometWrapper)));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         assertEq(cometWrapper.underlyingBalance(alice), cometWrapper.maxWithdraw(alice));
 
