@@ -23,6 +23,10 @@ contract CometWrapper is ERC4626, CometMath {
     }
 
     error LackAllowance();
+    error ZeroShares();
+    error ZeroAssets();
+    error TimestampTooLarge();
+    
     event RewardClaimed(address indexed src, address indexed recipient, address indexed token, uint256 amount);
 
     mapping(address => UserBasic) public userBasic;
@@ -54,8 +58,8 @@ contract CometWrapper is ERC4626, CometMath {
     }
 
     function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
-        // Check for rounding error since we round down in previewDeposit.
-        require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+        shares = previewDeposit(assets);
+        if (shares == 0) revert ZeroShares();
 
         accrueInternal();
         updatePrincipals(receiver, signed256(assets));
@@ -68,7 +72,7 @@ contract CometWrapper is ERC4626, CometMath {
     }
 
     function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
-        assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
+        assets = previewMint(shares);
 
         accrueInternal();
         updatePrincipals(receiver, signed256(assets));
@@ -81,10 +85,10 @@ contract CometWrapper is ERC4626, CometMath {
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
-        shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
+        shares = previewWithdraw(assets);
 
         if (msg.sender != owner) {
-            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+            uint256 allowed = allowance[owner][msg.sender];
 
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
@@ -106,8 +110,8 @@ contract CometWrapper is ERC4626, CometMath {
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
 
-        // Check for rounding error since we round down in previewRedeem.
-        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+        assets = previewRedeem(shares);
+        if (assets == 0) revert ZeroAssets();
 
         accrueInternal();
         updatePrincipals(owner, -signed256(assets));
@@ -139,8 +143,6 @@ contract CometWrapper is ERC4626, CometMath {
 
         updateTransferPrincipals(from, to, amount);
 
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
         unchecked {
             balanceOf[to] += amount;
         }
@@ -276,8 +278,6 @@ contract CometWrapper is ERC4626, CometMath {
     function mulFactor(uint256 n, uint256 factor) internal pure returns (uint256) {
         return n * factor / FACTOR_SCALE;
     }
-
-    error TimestampTooLarge();
 
     function presentValueSupply(uint64 baseSupplyIndex_, uint256 principalValue_) internal pure returns (uint256) {
         return principalValue_ * baseSupplyIndex_ / BASE_INDEX_SCALE;
