@@ -15,7 +15,6 @@ contract CometWrapper is ERC4626, CometMath {
     uint64 internal constant FACTOR_SCALE = 1e18;
     uint64 internal constant BASE_INDEX_SCALE = 1e15;
     uint256 constant TRACKING_INDEX_SCALE = 1e15;
-    uint64 constant RESCALE_FACTOR = 1e12;
 
     struct UserBasic {
         uint104 principal;
@@ -156,15 +155,22 @@ contract CometWrapper is ERC4626, CometMath {
     function updatePrincipals(address account, int256 balanceChange) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
-        (uint64 baseSupplyIndex,) = getSupplyIndices();
+        (uint64 baseSupplyIndex, uint64 trackingSupplyIndex) = getSupplyIndices();
+
+        if (principal >= 0) {
+            uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
+            basic.baseTrackingAccrued += safe64(uint104(principal) * indexDelta / TRACKING_INDEX_SCALE);
+        }
+        basic.baseTrackingIndex = trackingSupplyIndex;
 
         if (balanceChange != 0) {
             basic.principal = updatedPrincipal(principal, baseSupplyIndex, balanceChange);
-            userBasic[account] = basic;
             // Need to use the same method of updating wrapper's principal so that `totalAssets()`
             // will match with `comet.balanceOf(wrapper)`
             underlyingPrincipal = updatedPrincipal(underlyingPrincipal, baseSupplyIndex, balanceChange);
         }
+
+        userBasic[account] = basic;
     }
 
     function updateTransferPrincipals(address from, address to, uint256 shares) internal {
@@ -194,9 +200,17 @@ contract CometWrapper is ERC4626, CometMath {
     }
 
     function getRewardOwed(address account) external returns (uint256) {
+        ICometRewards.RewardConfig memory config = cometRewards.rewardConfig(address(comet));
         UserBasic memory basic = accrueRewards(account);
         uint256 claimed = rewardsClaimed[account];
-        uint256 accrued = basic.baseTrackingAccrued * RESCALE_FACTOR;
+        uint256 accrued = basic.baseTrackingAccrued;
+
+        if (config.shouldUpscale) {
+            accrued *= config.rescaleFactor;
+        } else {
+            accrued /= config.rescaleFactor;
+        }
+
         uint256 owed = accrued > claimed ? accrued - claimed : 0;
 
         return owed;
@@ -205,9 +219,16 @@ contract CometWrapper is ERC4626, CometMath {
     function claimTo(address to) external {
         address from = msg.sender;
         UserBasic memory basic = accrueRewards(from);
+        ICometRewards.RewardConfig memory config = cometRewards.rewardConfig(address(comet));
 
         uint256 claimed = rewardsClaimed[from];
-        uint256 accrued = basic.baseTrackingAccrued * RESCALE_FACTOR;
+        uint256 accrued = basic.baseTrackingAccrued;
+
+        if (config.shouldUpscale) {
+            accrued *= config.rescaleFactor;
+        } else {
+            accrued /= config.rescaleFactor;
+        }
 
         if (accrued > claimed) {
             uint256 owed = accrued - claimed;
@@ -222,10 +243,12 @@ contract CometWrapper is ERC4626, CometMath {
     function accrueRewards(address account) public returns (UserBasic memory) {
         UserBasic memory basic = userBasic[account];
         comet.accrueAccount(address(this));
-
         (, uint64 trackingSupplyIndex) = getSupplyIndices();
-        uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
-        basic.baseTrackingAccrued += safe64((uint104(basic.principal) * indexDelta) / TRACKING_INDEX_SCALE);
+
+        if (basic.principal >= 0) {
+            uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
+            basic.baseTrackingAccrued += safe64((uint104(basic.principal) * indexDelta) / TRACKING_INDEX_SCALE);
+        }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;
 
