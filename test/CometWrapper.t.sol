@@ -18,6 +18,13 @@ contract CometWrapperTest is BaseTest {
 
     function test__consructor() public {
         assertEq(cometWrapper.trackingIndexScale(), comet.trackingIndexScale());
+        assertEq(cometWrapper.underlyingPrincipal(), 0);
+        assertEq(address(cometWrapper.comet()), address(comet));
+        assertEq(address(cometWrapper.cometRewards()), address(cometReward));
+        assertEq(address(cometWrapper.asset()), address(comet));
+        assertEq(cometWrapper.decimals(), comet.decimals());
+        assertEq(cometWrapper.name(), "Comet USDC");
+        assertEq(cometWrapper.symbol(), "cUSDCv3");
     }
 
     function test__totalAssets() public {

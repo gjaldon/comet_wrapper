@@ -22,9 +22,9 @@ contract CometWrapper is ERC4626, CometHelpers {
 
     uint40 internal lastAccrualTime;
     uint256 public underlyingPrincipal;
-    CometInterface immutable comet;
-    ICometRewards public immutable cometRewards;
     uint256 internal immutable accrualDescaleFactor;
+    CometInterface public immutable comet;
+    ICometRewards public immutable cometRewards;
     uint256 public immutable trackingIndexScale;
 
     constructor(ERC20 _asset, ICometRewards _cometRewards, string memory _name, string memory _symbol)
