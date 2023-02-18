@@ -60,6 +60,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
+        if (assets == 0) revert ZeroAssets();
         shares = previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
 
@@ -74,7 +75,9 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
+        if (shares == 0) revert ZeroShares();
         assets = previewMint(shares);
+        if (assets == 0) revert ZeroAssets();
 
         accrueInternal();
         updatePrincipals(receiver, signed256(assets));
@@ -87,6 +90,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
+        if (assets == 0) revert ZeroAssets();
         shares = previewWithdraw(assets);
 
         if (msg.sender != owner) {
@@ -106,6 +110,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+        if (shares == 0) revert ZeroShares();
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
 
@@ -153,6 +158,10 @@ contract CometWrapper is ERC4626, CometHelpers {
         emit Transfer(from, to, amount);
     }
 
+    function maxWithdraw(address account) public view override returns (uint256) {
+        return underlyingBalance(account);
+    }
+
     function underlyingBalance(address account) public view returns (uint256) {
         uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);
         uint256 principal = userBasic[account].principal;
@@ -173,8 +182,8 @@ contract CometWrapper is ERC4626, CometHelpers {
 
         if (balanceChange != 0) {
             basic.principal = updatedPrincipal(principal, baseSupplyIndex, balanceChange);
-            // Need to use the same method of updating wrapper's principal so that `totalAssets()`
-            // will match with `comet.balanceOf(wrapper)`
+            // Any balance changes should lead to changes in principal
+            if (principal == basic.principal) revert NoChangeInPrincipal();
             underlyingPrincipal = updatedPrincipal(underlyingPrincipal, baseSupplyIndex, balanceChange);
         }
 

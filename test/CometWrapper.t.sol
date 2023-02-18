@@ -216,6 +216,31 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
     }
 
+    function test__disallowZeroSharesOrAssets() public {
+        vm.expectRevert(CometHelpers.ZeroShares.selector);
+        cometWrapper.mint(0, alice);
+        vm.expectRevert(CometHelpers.ZeroShares.selector);
+        cometWrapper.redeem(0, alice, alice);
+        vm.expectRevert(CometHelpers.ZeroAssets.selector);
+        cometWrapper.withdraw(0, alice, alice);
+        vm.expectRevert(CometHelpers.ZeroAssets.selector);
+        cometWrapper.deposit(0, alice);
+    }
+
+    function test__revertOnNoChangeInPrincipal() public {
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+
+        // any balance changes should also change principal
+        vm.expectRevert(CometHelpers.NoChangeInPrincipal.selector);
+        cometWrapper.mint(1, alice);
+
+        // any balance changes should also change principal
+        vm.expectRevert(CometHelpers.NoChangeInPrincipal.selector);
+        cometWrapper.deposit(1, alice);
+        vm.stopPrank();
+    }
+
     function test__transfer() public {
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);
@@ -242,7 +267,7 @@ contract CometWrapperTest is BaseTest {
 
         skip(30 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        
+
         vm.startPrank(alice);
         cometWrapper.withdraw(cometWrapper.maxWithdraw(alice), alice, alice);
         vm.stopPrank();
@@ -251,7 +276,8 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
         vm.stopPrank();
 
-        uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob) + cometWrapper.INITIAL_MINT();
+        uint256 totalAssets =
+            cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob) + cometWrapper.INITIAL_MINT();
         assertLe(totalAssets, cometWrapper.totalAssets());
     }
 
@@ -327,15 +353,10 @@ contract CometWrapperTest is BaseTest {
     }
 
     function test__transfersWithZeroDisallowed() public {
-        vm.startPrank(alice);
-        comet.allow(wrapperAddress, true);
-        cometWrapper.mint(5_000e6, alice);
-
         vm.expectRevert(CometHelpers.ZeroTransfer.selector);
         cometWrapper.transferFrom(alice, bob, 0);
 
         vm.expectRevert(CometHelpers.ZeroTransfer.selector);
         cometWrapper.transfer(bob, 0);
-        vm.stopPrank();
     }
 }
