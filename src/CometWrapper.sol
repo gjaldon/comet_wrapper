@@ -129,6 +129,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function transferInternal(address from, address to, uint256 amount) internal {
+        if (amount == 0) revert ZeroTransfer();
         balanceOf[from] -= amount;
 
         updateTransferPrincipals(from, to, amount);

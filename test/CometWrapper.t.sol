@@ -246,6 +246,16 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob), cometWrapper.totalAssets());
     }
 
+    function test__transferFromWorksForSender() public {
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.mint(5_000e6, alice);
+
+        cometWrapper.transferFrom(alice, bob, 2_500e6);
+        assertEq(cometWrapper.balanceOf(alice), 2_500e6);
+        vm.stopPrank();
+    }
+
     function test__transferFromRespectsAllowances() public {
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);
@@ -304,6 +314,19 @@ contract CometWrapperTest is BaseTest {
         vm.expectRevert();
         cometWrapper.transferFrom(alice, bob, 3_000e6);
         assertEq(cometWrapper.balanceOf(bob), 900e6);
+        vm.stopPrank();
+    }
+
+    function test__transfersWithZeroDisallowed() public {
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.mint(5_000e6, alice);
+
+        vm.expectRevert(CometHelpers.ZeroTransfer.selector);
+        cometWrapper.transferFrom(alice, bob, 0);
+
+        vm.expectRevert(CometHelpers.ZeroTransfer.selector);
+        cometWrapper.transfer(bob, 0);
         vm.stopPrank();
     }
 }
