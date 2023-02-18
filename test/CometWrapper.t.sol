@@ -246,6 +246,43 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob), cometWrapper.totalAssets());
     }
 
+    function test__transferFromRespectsAllowances() public {
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.mint(5_000e6, alice);
+        vm.stopPrank();
+
+        // Need approvals to transferFrom alice to bob
+        vm.startPrank(bob);
+        vm.expectRevert(CometHelpers.LackAllowance.selector);
+        cometWrapper.transferFrom(alice, bob, 5_000e6);
+        vm.stopPrank();
+
+        vm.prank(alice);
+        cometWrapper.approve(bob, 2_500e6);
+
+        vm.startPrank(bob);
+        // Allowances should be updated when transferFrom is done
+        assertEq(cometWrapper.allowance(alice, bob), 2_500e6);
+        cometWrapper.transferFrom(alice, bob, 2_500e6);
+        assertEq(cometWrapper.balanceOf(alice), 2_500e6);
+        assertEq(cometWrapper.balanceOf(bob), 2_500e6);
+
+        vm.expectRevert(CometHelpers.LackAllowance.selector);
+        cometWrapper.transferFrom(alice, bob, 2_500e6);
+        vm.stopPrank();
+        assertEq(cometWrapper.allowance(alice, bob), 0);
+
+        // Infinite allowance does not decrease allowance
+        vm.prank(bob);
+        cometWrapper.approve(alice, type(uint256).max);
+
+        vm.startPrank(alice);
+        cometWrapper.transferFrom(bob, alice, 1_000e6);
+        assertEq(cometWrapper.allowance(bob, alice), type(uint256).max);
+        vm.stopPrank();
+    }
+
     function test__transferFromRevertsOnLackingAllowance() public {
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);
