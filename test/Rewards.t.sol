@@ -95,6 +95,26 @@ contract RewardsTest is BaseTest {
         assertEq(wrapperRewards, rewardsFromComet);
     }
 
+    function test__accrueRewards() public {
+        enableRewardsAccrual();
+
+        vm.prank(cusdcHolder);
+        comet.transfer(alice, 10_000e6);
+
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.deposit(5_000e6, alice);
+        vm.stopPrank();
+
+        skip(30 days);
+        (,uint64 baseTrackingAccrued,) = cometWrapper.userBasic(alice);
+        assertEq(baseTrackingAccrued, 0);
+
+        cometWrapper.accrueRewards(alice);
+        (, baseTrackingAccrued,) = cometWrapper.userBasic(alice);
+        assertGt(baseTrackingAccrued, 0);
+    }
+
     function enableRewardsAccrual() internal {
         address governor = comet.governor();
         ICometConfigurator configurator = ICometConfigurator(configuratorAddress);
