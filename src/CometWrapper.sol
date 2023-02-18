@@ -46,7 +46,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function initialize() external {
-        if (initialized == true) revert("Initialized");
+        if (initialized == true) revert AlreadyInitialized();
         asset.safeTransferFrom(msg.sender, address(this), INITIAL_MINT);
         _mint(address(0), INITIAL_MINT);
         updatePrincipals(address(0), signed256(INITIAL_MINT));

@@ -53,6 +53,12 @@ contract CometWrapperTest is BaseTest {
         new CometWrapper(ERC20(address(comet)), ICometRewards(address(1)), "Name", "Symbol");
     }
 
+    function test__cantInitializeAgain() public {
+        // initialize is already called on setup
+        vm.expectRevert(CometHelpers.AlreadyInitialized.selector);
+        cometWrapper.initialize();
+    }
+
     function test__totalAssets() public {
         assertEq(cometWrapper.totalAssets(), cometWrapper.INITIAL_MINT() - 1);
 
