@@ -213,6 +213,9 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.mint(9_000e6, alice);
         cometWrapper.transferFrom(alice, bob, 1_337e6);
         vm.stopPrank();
+        assertEq(cometWrapper.balanceOf(alice), 7_663e6);
+        assertEq(cometWrapper.balanceOf(bob), 1_337e6);
+        assertEq(cometWrapper.totalSupply(), 9_000e6);
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(30 days);
@@ -224,9 +227,12 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.transfer(alice, 99e6);
         vm.stopPrank();
 
+        assertEq(cometWrapper.balanceOf(alice), 7_663e6 + 777e6 + 111e6 + 99e6);
+        assertEq(cometWrapper.balanceOf(bob), 1_337e6 - 777e6 - 111e6 - 99e6);
+        assertEq(cometWrapper.totalSupply(), 9_000e6);
+
         skip(30 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-
         assertEq(cometWrapper.underlyingBalance(alice), cometWrapper.maxWithdraw(alice));
 
         vm.startPrank(alice);
