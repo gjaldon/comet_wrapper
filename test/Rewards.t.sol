@@ -46,9 +46,9 @@ contract RewardsTest is BaseTest {
         assertGt(cometWrapper.getRewardOwed(bob), 0);
         assertEq(cometWrapper.getRewardOwed(bob), cometRewards.getRewardOwed(cometAddress, bob).owed);
 
-        assertEq(
-            cometWrapper.getRewardOwed(bob) + cometWrapper.getRewardOwed(alice) + 1e12,
-            cometRewards.getRewardOwed(cometAddress, wrapperAddress).owed
+        assertGt(
+            cometRewards.getRewardOwed(cometAddress, wrapperAddress).owed,
+            cometWrapper.getRewardOwed(bob) + cometWrapper.getRewardOwed(alice)
         );
     }
 
@@ -93,9 +93,6 @@ contract RewardsTest is BaseTest {
         vm.stopPrank();
 
         assertEq(wrapperRewards, rewardsFromComet);
-
-        // After all rewards are claimed, contract must have either 0 or negligible dust left
-        assertLe(comp.balanceOf(wrapperAddress), 1e12);
     }
 
     function enableRewardsAccrual() internal {

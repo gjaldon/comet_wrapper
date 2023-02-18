@@ -9,6 +9,7 @@ contract CometHelpers is CometMath {
     uint64 internal constant BASE_ACCRUAL_SCALE = 1e6;
 
     error LackAllowance();
+    error NoChangeInPrincipal();
     error ZeroShares();
     error ZeroAssets();
     error ZeroAddress();
