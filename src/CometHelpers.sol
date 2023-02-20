@@ -15,7 +15,6 @@ contract CometHelpers is CometMath {
     error ZeroAddress();
     error ZeroTransfer();
     error TimestampTooLarge();
-    error AlreadyInitialized();
 
     event RewardClaimed(address indexed src, address indexed recipient, address indexed token, uint256 amount);
 

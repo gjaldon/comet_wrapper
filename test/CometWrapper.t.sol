@@ -24,9 +24,9 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.decimals(), comet.decimals());
         assertEq(cometWrapper.name(), "Wrapped Comet USDC");
         assertEq(cometWrapper.symbol(), "WcUSDCv3");
-        assertEq(cometWrapper.totalSupply(), cometWrapper.INITIAL_MINT());
-        assertEq(cometWrapper.totalAssets(), cometWrapper.INITIAL_MINT() - 1);
-        assertGt(cometWrapper.underlyingPrincipal(), 0);
+        assertEq(cometWrapper.totalSupply(), 0);
+        assertEq(cometWrapper.totalAssets(), 0);
+        assertEq(cometWrapper.underlyingPrincipal(), 0);
     }
 
     function test__constructorRevertsOnInvalidComet() public {
@@ -53,14 +53,8 @@ contract CometWrapperTest is BaseTest {
         new CometWrapper(ERC20(address(comet)), ICometRewards(address(1)), "Name", "Symbol");
     }
 
-    function test__cantInitializeAgain() public {
-        // initialize is already called on setup
-        vm.expectRevert(CometHelpers.AlreadyInitialized.selector);
-        cometWrapper.initialize();
-    }
-
     function test__totalAssets() public {
-        assertEq(cometWrapper.totalAssets(), cometWrapper.INITIAL_MINT() - 1);
+        assertEq(cometWrapper.totalAssets(), 0);
 
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);
@@ -82,7 +76,7 @@ contract CometWrapperTest is BaseTest {
     }
 
     function test__nullifyInflationAttacks() public {
-        assertEq(cometWrapper.totalAssets(), cometWrapper.INITIAL_MINT() - 1);
+        assertEq(cometWrapper.totalAssets(), 0);
 
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);
@@ -182,9 +176,8 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.balanceOf(bob), 7_777e6);
         assertEq(cometWrapper.maxRedeem(bob), cometWrapper.balanceOf(bob));
 
-        uint256 totalAssets =
-            cometWrapper.maxWithdraw(bob) + cometWrapper.maxWithdraw(alice) + cometWrapper.INITIAL_MINT();
-        assertEq(totalAssets - 1, cometWrapper.totalAssets());
+        uint256 totalAssets = cometWrapper.maxWithdraw(bob) + cometWrapper.maxWithdraw(alice);
+        assertEq(totalAssets, cometWrapper.totalAssets());
 
         vm.startPrank(bob);
         cometWrapper.withdraw(cometWrapper.maxWithdraw(bob), bob, bob);
@@ -208,7 +201,7 @@ contract CometWrapperTest is BaseTest {
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
-        uint256 totalRedeems = cometWrapper.maxRedeem(alice) + cometWrapper.maxRedeem(bob) + cometWrapper.INITIAL_MINT();
+        uint256 totalRedeems = cometWrapper.maxRedeem(alice) + cometWrapper.maxRedeem(bob);
         assertEq(totalRedeems, cometWrapper.totalSupply());
 
         skip(500 days);
@@ -255,7 +248,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
         assertEq(cometWrapper.balanceOf(alice), 7_663e6);
         assertEq(cometWrapper.balanceOf(bob), 1_337e6);
-        assertEq(cometWrapper.totalSupply(), 9_000e6 + cometWrapper.INITIAL_MINT());
+        assertEq(cometWrapper.totalSupply(), 9_000e6);
 
         // assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(30 days);
@@ -269,7 +262,7 @@ contract CometWrapperTest is BaseTest {
 
         assertEq(cometWrapper.balanceOf(alice), 7_663e6 + 777e6 + 111e6 + 99e6);
         assertEq(cometWrapper.balanceOf(bob), 1_337e6 - 777e6 - 111e6 - 99e6);
-        assertEq(cometWrapper.totalSupply(), 9_000e6 + cometWrapper.INITIAL_MINT());
+        assertEq(cometWrapper.totalSupply(), 9_000e6);
 
         skip(30 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
@@ -282,8 +275,7 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
         vm.stopPrank();
 
-        uint256 totalAssets =
-            cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob) + cometWrapper.INITIAL_MINT();
+        uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
         assertLe(totalAssets, cometWrapper.totalAssets());
     }
 

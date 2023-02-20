@@ -11,8 +11,6 @@ import {ICometRewards} from "./vendor/ICometRewards.sol";
 contract CometWrapper is ERC4626, CometHelpers {
     using SafeTransferLib for ERC20;
 
-    uint256 public constant INITIAL_MINT = 10e6;
-
     struct UserBasic {
         uint104 principal;
         uint64 baseTrackingAccrued;
@@ -23,7 +21,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     mapping(address => uint256) public rewardsClaimed;
 
     uint40 internal lastAccrualTime;
-    bool public initialized;
     uint256 public underlyingPrincipal;
 
     CometInterface public immutable comet;
@@ -43,14 +40,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         cometRewards = _cometRewards;
         trackingIndexScale = comet.trackingIndexScale();
         accrualDescaleFactor = uint64(10 ** asset.decimals()) / BASE_ACCRUAL_SCALE;
-    }
-
-    function initialize() external {
-        if (initialized == true) revert AlreadyInitialized();
-        asset.safeTransferFrom(msg.sender, address(this), INITIAL_MINT);
-        _mint(address(0), INITIAL_MINT);
-        updatePrincipals(address(0), signed256(INITIAL_MINT));
-        initialized = true;
     }
 
     function totalAssets() public view override returns (uint256) {

@@ -17,7 +17,6 @@ contract DeployCometWrapper is Script {
             new CometWrapper(ERC20(COMET), ICometRewards(REWARDS), "Wrapped Comet USDC", "WcUSDCv3");
         CometInterface comet = CometInterface(COMET);
         comet.allow(address(cometWrapper), true);
-        cometWrapper.initialize();
 
         vm.stopBroadcast();
     }
