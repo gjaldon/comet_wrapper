@@ -93,30 +93,3 @@ contract WrapperFuzzTest is DSTestPlus {
         }
     }
 }
-
-/*
-Logs:
-
-    CONFIG:
-    
-    rando = 58973458937458395739;
-    modulo = 50000e6;
-    nRuns = 10000;
-    nUsers = 50;
-
-
-
-
-    RESULTS:
-
-    totalUBal 102290372265267
-    wrapperBal 102290372265165
-    == false
-    users win 102
-
-    totalUBal 199
-    wrapperBal 74
-    == false
-    users win 125
-    
-*/
