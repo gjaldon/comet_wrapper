@@ -31,3 +31,6 @@ To witdhraw a Compound III token like cUSDCv3, you may use either `withdraw` or 
 
 - `cometWrapper.withdraw(amount, receiver, owner)` - `amount` is the number of Compound III tokens to be withdrawn. You can only withdraw tokens that you deposited.
 - `cometWrapper.redeem(amount, receiver, owner)` - `amount` is the number of Wrapped Compound III tokens to be redeemed in exchange for the deposited Compound III tokens.
+
+### Run fuzzy test
+forge test --fork-url https://eth-mainnet.alchemyapi.io/v2/$(ALCHEMY_API_KEY) --match-path test/WrapperFuzz.t.sol
