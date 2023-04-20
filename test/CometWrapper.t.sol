@@ -9,11 +9,11 @@ contract CometWrapperTest is BaseTest {
 
         vm.prank(cusdcHolder);
         comet.transfer(alice, 10_000e6);
-        assertGt(comet.balanceOf(alice), 999e6);
+        assertGt(comet.balanceOf(alice), 9999e6);
 
         vm.prank(cusdcHolder);
         comet.transfer(bob, 10_000e6);
-        assertGt(comet.balanceOf(bob), 999e6);
+        assertGt(comet.balanceOf(bob), 9999e6);
     }
 
     function test__consructor() public {
@@ -117,7 +117,7 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
         // Alice and Bob should be able to withdraw all their assets without issue
-        assertLe(totalAssets, cometWrapper.totalAssets());
+        assertEq(totalAssets, cometWrapper.totalAssets());
     }
 
     function test__withdraw() public {
@@ -250,7 +250,7 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.balanceOf(bob), 1_337e6);
         assertEq(cometWrapper.totalSupply(), 9_000e6);
 
-        // assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(30 days);
 
         vm.startPrank(bob);
@@ -276,7 +276,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
-        assertLe(totalAssets, cometWrapper.totalAssets());
+        assertEq(totalAssets, cometWrapper.totalAssets());
     }
 
     function test__transferFromWorksForSender() public {
