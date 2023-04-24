@@ -220,20 +220,6 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.deposit(0, alice);
     }
 
-    function test__revertOnNoChangeInPrincipal() public {
-        vm.startPrank(alice);
-        comet.allow(wrapperAddress, true);
-
-        // any balance changes should also change principal
-        vm.expectRevert(CometHelpers.NoChangeInPrincipal.selector);
-        cometWrapper.mint(1, alice);
-
-        // any balance changes should also change principal
-        vm.expectRevert(CometHelpers.NoChangeInPrincipal.selector);
-        cometWrapper.deposit(1, alice);
-        vm.stopPrank();
-    }
-
     function test__transfer() public {
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);

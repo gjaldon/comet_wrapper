@@ -62,8 +62,12 @@ contract CometWrapper is ERC4626, CometHelpers {
         if (shares == 0) revert ZeroShares();
 
         accrueInternal();
-        updatePrincipals(receiver, signed256(assets));
+        updateTrackingIndex(receiver);
+        int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
+        int104 principalChange = comet.userBasic(address(this)).principal - prevPrincipal;
+        userBasic[receiver].principal += unsigned104(principalChange);
+        underlyingPrincipal += unsigned104(principalChange);
 
         _mint(receiver, shares);
 
@@ -80,9 +84,12 @@ contract CometWrapper is ERC4626, CometHelpers {
         if (assets == 0) revert ZeroAssets();
 
         accrueInternal();
-        updatePrincipals(receiver, signed256(assets));
-        // Need to transfer before minting or ERC777s could reenter.
+        updateTrackingIndex(receiver);
+        int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
+        int104 principalChange = comet.userBasic(address(this)).principal - prevPrincipal;
+        userBasic[receiver].principal += unsigned104(principalChange);
+        underlyingPrincipal += unsigned104(principalChange);
 
         _mint(receiver, shares);
 
@@ -98,6 +105,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
         if (assets == 0) revert ZeroAssets();
         shares = previewWithdraw(assets);
+        if (shares == 0) revert ZeroShares();
 
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender];
@@ -106,13 +114,16 @@ contract CometWrapper is ERC4626, CometHelpers {
         }
 
         accrueInternal();
-        updatePrincipals(owner, -signed256(assets));
-
+        updateTrackingIndex(owner);
         _burn(owner, shares);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
-
+        int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
+        int104 principalChange = prevPrincipal - comet.userBasic(address(this)).principal;
+        userBasic[owner].principal -= unsigned104(principalChange);
+        underlyingPrincipal -= unsigned104(principalChange);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
     /// @notice Redeems shares (Wrapped Comet) in exchange for assets (Wrapped Comet).
@@ -131,15 +142,19 @@ contract CometWrapper is ERC4626, CometHelpers {
 
         assets = previewRedeem(shares);
         if (assets == 0) revert ZeroAssets();
+        
 
         accrueInternal();
-        updatePrincipals(owner, -signed256(assets));
-
+        updateTrackingIndex(owner);
         _burn(owner, shares);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
-
+        int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
+        int104 principalChange = prevPrincipal - comet.userBasic(address(this)).principal;
+        userBasic[owner].principal -= unsigned104(principalChange);
+        underlyingPrincipal -= unsigned104(principalChange);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
     /// @notice Transfer shares from caller to the recipient
@@ -179,13 +194,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         emit Transfer(from, to, amount);
     }
 
-    /// @notice Maximum amount that can be withdrawn
-    /// @param account The address to be queried
-    /// @return The maximum amount that can be withdrawn from given account
-    function maxWithdraw(address account) public view override returns (uint256) {
-        return underlyingBalance(account);
-    }
-
     /// @notice Total assets of an account that are managed by this vault
     /// @dev The asset balance is computed from an account's `userBasic.principal` which mirrors how Comet
     /// computes token balances. This is done this way since balances are ever-increasing due to 
@@ -198,17 +206,10 @@ contract CometWrapper is ERC4626, CometHelpers {
         return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
     }
 
-    /// @dev UserBasic.principal is used as the basis for computation of rewards accrual. In Comet,
-    /// this is also used for computing interest accrual on the base asset. Balances of users
-    /// are also computed from their userBasic.principal. 
-    /// This works like [`Comet.updateBasePrincipal`](https://github.com/compound-finance/comet/blob/63e98e5d231ef50c755a9489eb346a561fc7663c/contracts/Comet.sol#L738-L760)
-    /// but without the logic for using `trackingBorrowIndex` since principal will never be negative in CometWrapper.
-    /// The other difference is that this function also updates the `underlyingPrincipal` which is 
-    /// the principal for the whole contract and is similar to `totalSupply` in ERC20.
-    function updatePrincipals(address account, int256 balanceChange) internal {
+    function updateTrackingIndex(address account) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
-        (uint64 baseSupplyIndex, uint64 trackingSupplyIndex) = getSupplyIndices();
+        (, uint64 trackingSupplyIndex) = getSupplyIndices();
 
         if (principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
@@ -216,14 +217,6 @@ contract CometWrapper is ERC4626, CometHelpers {
                 safe64(uint104(principal) * indexDelta / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
-
-        if (balanceChange != 0) {
-            basic.principal = updatedPrincipal(principal, baseSupplyIndex, balanceChange);
-            // Any balance changes should lead to changes in principal
-            if (principal == basic.principal) revert NoChangeInPrincipal();
-            underlyingPrincipal = updatedPrincipal(underlyingPrincipal, baseSupplyIndex, balanceChange);
-        }
-
         userBasic[account] = basic;
     }
 
@@ -348,5 +341,43 @@ contract CometWrapper is ERC4626, CometHelpers {
         TotalsBasic memory totals = comet.totalsBasic();
         baseSupplyIndex_ = totals.baseSupplyIndex;
         trackingSupplyIndex_ = totals.trackingSupplyIndex;
+    }
+
+    function userPrincipal(address account) public view returns (uint104) {
+        return userBasic[account].principal;
+    }
+
+    /// @notice Maximum amount that can be withdrawn
+    /// @dev Maximum assets that can be withdrawn will not always match user's assets balance and may be less.
+    /// @param account The address to be queried
+    /// @return The maximum amount that can be withdrawn from given account
+    function maxWithdraw(address account) public view override returns (uint256) {
+        uint256 principal = userBasic[account].principal;
+        if (principal == 0) {
+            return 0;            
+        }
+
+        uint256 maxShares = maxRedeem(account);
+        return convertToAssets(maxShares);
+    }
+
+    /// @notice Maximum amount that can be redeemed
+    /// @dev Maximum shares that can be redeemed will not always match user's shares balance and may be less.
+    /// @param account The address to be queried
+    /// @return The maximum amount that can be withdrawn from given account
+    function maxRedeem(address account) public view override returns (uint256) {
+        uint256 principal = userBasic[account].principal;
+        if (principal == 0) {
+            return 0;            
+        }
+        uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);        
+        uint256 assets = presentValueSupply(baseSupplyIndex_, principal);
+        uint256 balance = balanceOf[account];
+        uint256 maxShares = convertToShares(assets);
+        if (balance < maxShares) {
+            return balance;
+        } else {
+            return maxShares;
+        }
     }
 }
