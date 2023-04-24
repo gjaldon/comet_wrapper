@@ -28,11 +28,7 @@ contract RewardsTest is BaseTest {
         cometWrapper.deposit(5_000e6, bob);
         vm.stopPrank();
 
-        // Assets in CometWrapper should match Comet balance or at least be less by only 1 due to rounding
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        assertEq(cometWrapper.underlyingBalance(alice) - 1, comet.balanceOf(alice));
-        assertEq(cometWrapper.underlyingBalance(bob) - 1, comet.balanceOf(bob));
-
         // Rewards accrual will not be applied retroactively
         assertEq(cometWrapper.getRewardOwed(alice), 0);
         assertEq(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed);

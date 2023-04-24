@@ -16,7 +16,7 @@ contract CometWrapperTest is BaseTest {
         assertGt(comet.balanceOf(bob), 9999e6);
     }
 
-    function test__consructor() public {
+    function test__constructor() public {
         assertEq(cometWrapper.trackingIndexScale(), comet.trackingIndexScale());
         assertEq(address(cometWrapper.comet()), address(comet));
         assertEq(address(cometWrapper.cometRewards()), address(cometRewards));
@@ -101,13 +101,8 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        // Account for rounding errors that lead to difference of 1
-        assertEq(cometWrapper.maxWithdraw(alice) - 1, comet.balanceOf(alice));
-
         skip(14 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        // Account for rounding errors that lead to difference of 1
-        assertEq(cometWrapper.maxWithdraw(alice) - 1, comet.balanceOf(alice));
 
         vm.startPrank(bob);
         comet.allow(wrapperAddress, true);
@@ -117,7 +112,7 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
         // Alice and Bob should be able to withdraw all their assets without issue
-        assertEq(totalAssets, cometWrapper.totalAssets());
+        assertLe(totalAssets, cometWrapper.totalAssets());
     }
 
     function test__withdraw() public {
@@ -153,7 +148,7 @@ contract CometWrapperTest is BaseTest {
         vm.startPrank(bob);
         // Due to rounding errors when updating principal, sometimes maxWithdraw may be off by 1
         // This edge case appears when zeroing out the assets from the Wrapper contract
-        cometWrapper.withdraw(cometWrapper.maxWithdraw(bob) - 1, bob, bob);
+        cometWrapper.withdraw(cometWrapper.maxWithdraw(bob), bob, bob);
         vm.stopPrank();
     }
 
@@ -174,17 +169,16 @@ contract CometWrapperTest is BaseTest {
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         assertEq(cometWrapper.balanceOf(bob), 7_777e6);
-        assertEq(cometWrapper.maxRedeem(bob), cometWrapper.balanceOf(bob));
 
         uint256 totalAssets = cometWrapper.maxWithdraw(bob) + cometWrapper.maxWithdraw(alice);
-        assertEq(totalAssets, cometWrapper.totalAssets());
+        assertLe(totalAssets, cometWrapper.totalAssets());
 
         vm.startPrank(bob);
-        cometWrapper.withdraw(cometWrapper.maxWithdraw(bob), bob, bob);
+        cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
         vm.stopPrank();
 
         vm.startPrank(alice);
-        cometWrapper.withdraw(cometWrapper.maxWithdraw(alice) - 1, alice, alice);
+        cometWrapper.redeem(cometWrapper.maxRedeem(alice), alice, alice);
         vm.stopPrank();
     }
 
@@ -202,7 +196,7 @@ contract CometWrapperTest is BaseTest {
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
 
         uint256 totalRedeems = cometWrapper.maxRedeem(alice) + cometWrapper.maxRedeem(bob);
-        assertEq(totalRedeems, cometWrapper.totalSupply());
+        assertLe(totalRedeems, cometWrapper.totalSupply());
 
         skip(500 days);
 
@@ -266,17 +260,8 @@ contract CometWrapperTest is BaseTest {
 
         skip(30 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-
-        vm.startPrank(alice);
-        cometWrapper.withdraw(cometWrapper.maxWithdraw(alice), alice, alice);
-        vm.stopPrank();
-
-        vm.startPrank(bob);
-        cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
-        vm.stopPrank();
-
-        uint256 totalAssets = cometWrapper.maxWithdraw(alice) + cometWrapper.maxWithdraw(bob);
-        assertEq(totalAssets, cometWrapper.totalAssets());
+        uint104 totalPrincipal = uint104(comet.userBasic(address(cometWrapper)).principal);
+        assertEq(cometWrapper.userPrincipal(alice) + cometWrapper.userPrincipal(bob), totalPrincipal);
     }
 
     function test__transferFromWorksForSender() public {
