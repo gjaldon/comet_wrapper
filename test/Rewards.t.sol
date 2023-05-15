@@ -103,11 +103,11 @@ contract RewardsTest is BaseTest {
         vm.stopPrank();
 
         skip(30 days);
-        (, uint64 baseTrackingAccrued,) = cometWrapper.userBasic(alice);
+        (uint64 baseTrackingAccrued,) = cometWrapper.userBasic(alice);
         assertEq(baseTrackingAccrued, 0);
 
         cometWrapper.accrueRewards(alice);
-        (, baseTrackingAccrued,) = cometWrapper.userBasic(alice);
+        (baseTrackingAccrued,) = cometWrapper.userBasic(alice);
         assertGt(baseTrackingAccrued, 0);
     }
 

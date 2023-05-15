@@ -27,7 +27,6 @@ contract CometWrapperTest is BaseTest, CometMath {
         assertEq(cometWrapper.symbol(), "WcUSDCv3");
         assertEq(cometWrapper.totalSupply(), 0);
         assertEq(cometWrapper.totalAssets(), 0);
-        assertEq(cometWrapper.underlyingPrincipal(), 0);
     }
 
     function test__constructorRevertsOnInvalidComet() public {

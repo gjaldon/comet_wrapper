@@ -14,7 +14,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     using SafeTransferLib for ERC20;
 
     struct UserBasic {
-        uint104 principal;
         uint64 baseTrackingAccrued;
         uint64 baseTrackingIndex;
     }
@@ -56,7 +55,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         if (assets == 0) revert ZeroAssets();
 
         accrueInternal();
-        // updateTrackingIndex(receiver);
+        updateTrackingIndex(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
         shares = unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
@@ -76,7 +75,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         if (assets == 0) revert ZeroAssets();
 
         accrueInternal();
-        // updateTrackingIndex(receiver);
+        updateTrackingIndex(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
         shares =  unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
@@ -100,7 +99,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         }
 
         accrueInternal();
-        // updateTrackingIndex(owner);
+        updateTrackingIndex(owner);
 
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
@@ -130,7 +129,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         
 
         accrueInternal();
-        // updateTrackingIndex(owner);
+        updateTrackingIndex(owner);
         asset.safeTransfer(receiver, assets);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
@@ -172,7 +171,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     /// @notice Total assets of an account that are managed by this vault
-    /// @dev The asset balance is computed from an account's `userBasic.principal` which mirrors how Comet
+    /// @dev The asset balance is computed from an account's shares balance which mirrors how Comet
     /// computes token balances. This is done this way since balances are ever-increasing due to 
     /// interest accrual.
     /// @param account The address to be queried
@@ -185,13 +184,13 @@ contract CometWrapper is ERC4626, CometHelpers {
 
     function updateTrackingIndex(address account) internal {
         UserBasic memory basic = userBasic[account];
-        uint104 principal = basic.principal;
+        uint256 principal = balanceOf[account];
         (, uint64 trackingSupplyIndex,) = getSupplyIndices();
 
         if (principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
             basic.baseTrackingAccrued +=
-                safe64(uint104(principal) * indexDelta / trackingIndexScale / accrualDescaleFactor);
+                safe64(principal * indexDelta / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;
@@ -259,13 +258,14 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return The UserBasic struct with updated baseTrackingIndex and/or baseTrackingAccrued fields
     function accrueRewards(address account) public returns (UserBasic memory) {
         UserBasic memory basic = userBasic[account];
+        uint256 principal = balanceOf[account];
         comet.accrueAccount(address(this));
         (, uint64 trackingSupplyIndex,) = getSupplyIndices();
 
-        if (basic.principal >= 0) {
+        if (principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
             basic.baseTrackingAccrued +=
-                safe64((uint104(basic.principal) * indexDelta) / trackingIndexScale / accrualDescaleFactor);
+                safe64((principal * indexDelta) / trackingIndexScale / accrualDescaleFactor);
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;
@@ -296,10 +296,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         baseSupplyIndex_ = totals.baseSupplyIndex;
         trackingSupplyIndex_ = totals.trackingSupplyIndex;
         lastAccrualTime_ = totals.lastAccrualTime;
-    }
-
-    function userPrincipal(address account) public view returns (uint104) {
-        return userBasic[account].principal;
     }
 
     /// @notice Maximum amount that can be withdrawn
