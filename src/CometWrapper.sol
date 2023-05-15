@@ -22,7 +22,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     mapping(address => UserBasic) public userBasic;
     mapping(address => uint256) public rewardsClaimed;
 
-    uint40 internal lastAccrualTime;
     uint256 public underlyingPrincipal;
 
     CometInterface public immutable comet;
@@ -38,7 +37,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         _cometRewards.rewardConfig(address(_asset));
 
         comet = CometInterface(address(_asset));
-        lastAccrualTime = getNowInternal();
         cometRewards = _cometRewards;
         trackingIndexScale = comet.trackingIndexScale();
         accrualDescaleFactor = uint64(10 ** asset.decimals()) / BASE_ACCRUAL_SCALE;
@@ -47,7 +45,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @notice Returns total assets managed by the vault
     /// @return total assets
     function totalAssets() public view override returns (uint256) {
-        uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);
+        uint64 baseSupplyIndex_ = accruedSupplyIndex();
         uint256 principal = underlyingPrincipal;
         return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
     }
@@ -201,7 +199,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @param account The address to be queried
     /// @return The total amount of assets held by an account
     function underlyingBalance(address account) public view returns (uint256) {
-        uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);
+        uint64 baseSupplyIndex_ = accruedSupplyIndex();
         uint256 principal = userBasic[account].principal;
         return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
     }
@@ -209,7 +207,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     function updateTrackingIndex(address account) internal {
         UserBasic memory basic = userBasic[account];
         uint104 principal = basic.principal;
-        (, uint64 trackingSupplyIndex) = getSupplyIndices();
+        (, uint64 trackingSupplyIndex,) = getSupplyIndices();
 
         if (principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
@@ -240,12 +238,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function accrueInternal() internal {
-        uint40 now_ = getNowInternal();
-        uint256 timeElapsed = uint256(now_ - lastAccrualTime);
-        if (timeElapsed > 0) {
-            comet.accrueAccount(address(this));
-            lastAccrualTime = now_;
-        }
+        comet.accrueAccount(address(this));
     }
 
     /// @notice Get the reward owed to an account
@@ -307,7 +300,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     function accrueRewards(address account) public returns (UserBasic memory) {
         UserBasic memory basic = userBasic[account];
         comet.accrueAccount(address(this));
-        (, uint64 trackingSupplyIndex) = getSupplyIndices();
+        (, uint64 trackingSupplyIndex,) = getSupplyIndices();
 
         if (basic.principal >= 0) {
             uint256 indexDelta = uint256(trackingSupplyIndex - basic.baseTrackingIndex);
@@ -324,8 +317,9 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// current block. This works like `Comet.accruedInterestedIndices` at but not including computation of
     /// `baseBorrowIndex` since we do not need that index in CometWrapper:
     /// https://github.com/compound-finance/comet/blob/63e98e5d231ef50c755a9489eb346a561fc7663c/contracts/Comet.sol#L383-L394
-    function accruedSupplyIndex(uint256 timeElapsed) internal view returns (uint64) {
-        (uint64 baseSupplyIndex_,) = getSupplyIndices();
+    function accruedSupplyIndex() internal view returns (uint64) {
+        (uint64 baseSupplyIndex_,,uint40 lastAccrualTime) = getSupplyIndices();
+        uint256 timeElapsed = uint256(getNowInternal() - lastAccrualTime);
         if (timeElapsed > 0) {
             uint256 utilization = comet.getUtilization();
             uint256 supplyRate = comet.getSupplyRate(utilization);
@@ -337,10 +331,11 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @dev To maintain accuracy, we fetch `baseSupplyIndex` and `trackingSupplyIndex` directly from Comet.
     /// baseSupplyIndex is used on the principal to get the user's latest balance including interest accruals.
     /// trackingSupplyIndex is used to compute for rewards accruals.
-    function getSupplyIndices() internal view returns (uint64 baseSupplyIndex_, uint64 trackingSupplyIndex_) {
+    function getSupplyIndices() internal view returns (uint64 baseSupplyIndex_, uint64 trackingSupplyIndex_, uint40 lastAccrualTime_) {
         TotalsBasic memory totals = comet.totalsBasic();
         baseSupplyIndex_ = totals.baseSupplyIndex;
         trackingSupplyIndex_ = totals.trackingSupplyIndex;
+        lastAccrualTime_ = totals.lastAccrualTime;
     }
 
     function userPrincipal(address account) public view returns (uint104) {
@@ -370,7 +365,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         if (principal == 0) {
             return 0;            
         }
-        uint64 baseSupplyIndex_ = accruedSupplyIndex(getNowInternal() - lastAccrualTime);        
+        uint64 baseSupplyIndex_ = accruedSupplyIndex();        
         uint256 assets = presentValueSupply(baseSupplyIndex_, principal);
         uint256 balance = balanceOf[account];
         uint256 maxShares = convertToShares(assets);
