@@ -22,8 +22,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     mapping(address => UserBasic) public userBasic;
     mapping(address => uint256) public rewardsClaimed;
 
-    uint256 public underlyingPrincipal;
-
     CometInterface public immutable comet;
     ICometRewards public immutable cometRewards;
     uint256 public immutable trackingIndexScale;
@@ -181,7 +179,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return The total amount of assets held by an account
     function underlyingBalance(address account) public view returns (uint256) {
         uint64 baseSupplyIndex_ = accruedSupplyIndex();
-        uint256 principal = userBasic[account].principal;
+        uint256 principal = balanceOf[account];
         return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
     }
 
@@ -197,17 +195,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;
-    }
-
-    /// @dev Converts the `principal` to `balance` before adding the signed balance change. The new balance
-    /// is the converted back to a `principal` value.
-    function updatedPrincipal(uint256 principal, uint64 baseSupplyIndex, int256 balanceChange)
-        internal
-        pure
-        returns (uint104)
-    {
-        int256 balance = signed256(presentValueSupply(baseSupplyIndex, principal)) + balanceChange;
-        return principalValueSupply(baseSupplyIndex, unsigned256(balance));
     }
 
     function accrueInternal() internal {
