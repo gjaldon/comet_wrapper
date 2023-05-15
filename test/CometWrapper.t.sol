@@ -2,8 +2,9 @@
 pragma solidity 0.8.17;
 
 import {BaseTest, CometHelpers, CometWrapper, ERC20, ICometRewards} from "./BaseTest.sol";
+import {CometMath} from "../src/vendor/CometMath.sol";
 
-contract CometWrapperTest is BaseTest {
+contract CometWrapperTest is BaseTest, CometMath {
     function setUp() public override {
         super.setUp();
 
@@ -159,7 +160,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        assertEq(cometWrapper.balanceOf(alice), 9_000e6);
+        assertApproxEqAbs(cometWrapper.balanceOf(alice), 9_000e6, 1);
         assertEq(cometWrapper.maxRedeem(alice), cometWrapper.balanceOf(alice));
 
         vm.startPrank(bob);
@@ -168,7 +169,7 @@ contract CometWrapperTest is BaseTest {
         vm.stopPrank();
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        assertEq(cometWrapper.balanceOf(bob), 7_777e6);
+        assertApproxEqAbs(cometWrapper.balanceOf(bob), 7_777e6, 1);
 
         uint256 totalAssets = cometWrapper.maxWithdraw(bob) + cometWrapper.maxWithdraw(alice);
         assertLe(totalAssets, cometWrapper.totalAssets());
@@ -193,10 +194,8 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.mint(7_777e6, bob);
         vm.stopPrank();
 
+        assertEq(cometWrapper.totalSupply(), unsigned104(comet.userBasic(wrapperAddress).principal));
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-
-        uint256 totalRedeems = cometWrapper.maxRedeem(alice) + cometWrapper.maxRedeem(bob);
-        assertLe(totalRedeems, cometWrapper.totalSupply());
 
         skip(500 days);
 
@@ -226,9 +225,9 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.mint(9_000e6, alice);
         cometWrapper.transferFrom(alice, bob, 1_337e6);
         vm.stopPrank();
-        assertEq(cometWrapper.balanceOf(alice), 7_663e6);
-        assertEq(cometWrapper.balanceOf(bob), 1_337e6);
-        assertEq(cometWrapper.totalSupply(), 9_000e6);
+        assertApproxEqAbs(cometWrapper.balanceOf(alice), 7_663e6, 1);
+        assertApproxEqAbs(cometWrapper.balanceOf(bob), 1_337e6, 1);
+        assertApproxEqAbs(cometWrapper.totalSupply(), 9_000e6, 1);
 
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
         skip(30 days);
@@ -240,14 +239,13 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.transfer(alice, 99e6);
         vm.stopPrank();
 
-        assertEq(cometWrapper.balanceOf(alice), 7_663e6 + 777e6 + 111e6 + 99e6);
-        assertEq(cometWrapper.balanceOf(bob), 1_337e6 - 777e6 - 111e6 - 99e6);
-        assertEq(cometWrapper.totalSupply(), 9_000e6);
+        assertApproxEqAbs(cometWrapper.balanceOf(alice), 7_663e6 + 777e6 + 111e6 + 99e6, 1);
+        assertApproxEqAbs(cometWrapper.balanceOf(bob), 1_337e6 - 777e6 - 111e6 - 99e6, 1);
 
         skip(30 days);
         assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
-        uint104 totalPrincipal = uint104(comet.userBasic(address(cometWrapper)).principal);
-        assertEq(cometWrapper.userPrincipal(alice) + cometWrapper.userPrincipal(bob), totalPrincipal);
+        uint256 totalPrincipal = unsigned256(comet.userBasic(address(cometWrapper)).principal);
+        assertEq(cometWrapper.totalSupply(), totalPrincipal);
     }
 
     function test__transferFromWorksForSender() public {
@@ -256,7 +254,7 @@ contract CometWrapperTest is BaseTest {
         cometWrapper.mint(5_000e6, alice);
 
         cometWrapper.transferFrom(alice, bob, 2_500e6);
-        assertEq(cometWrapper.balanceOf(alice), 2_500e6);
+        assertApproxEqAbs(cometWrapper.balanceOf(alice), 2_500e6, 1);
         vm.stopPrank();
     }
 
@@ -279,8 +277,8 @@ contract CometWrapperTest is BaseTest {
         // Allowances should be updated when transferFrom is done
         assertEq(cometWrapper.allowance(alice, bob), 2_500e6);
         cometWrapper.transferFrom(alice, bob, 2_500e6);
-        assertEq(cometWrapper.balanceOf(alice), 2_500e6);
-        assertEq(cometWrapper.balanceOf(bob), 2_500e6);
+        assertApproxEqAbs(cometWrapper.balanceOf(alice), 2_500e6, 1);
+        assertApproxEqAbs(cometWrapper.balanceOf(bob), 2_500e6, 1);
 
         vm.expectRevert(CometHelpers.LackAllowance.selector);
         cometWrapper.transferFrom(alice, bob, 2_500e6);

@@ -18,7 +18,7 @@ abstract contract CometInterface is CometMainInterface, CometExtInterface {
         uint8 _reserved;
     }
 
-    function userBasic(address account) external virtual returns (UserBasic memory);
+    function userBasic(address account) external view virtual returns (UserBasic memory);
 
     struct TotalsCollateral {
         uint128 totalSupplyAsset;

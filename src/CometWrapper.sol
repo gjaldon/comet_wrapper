@@ -46,8 +46,8 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return total assets
     function totalAssets() public view override returns (uint256) {
         uint64 baseSupplyIndex_ = accruedSupplyIndex();
-        uint256 principal = underlyingPrincipal;
-        return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
+        uint256 supply = totalSupply;
+        return supply > 0 ? presentValueSupply(baseSupplyIndex_, supply) : 0;
     }
 
     /// @notice Deposits assets into the vault and gets shares (Wrapped Comet token) in return
@@ -56,17 +56,13 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return shares The amount of shares that are minted to the receiver
     function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
         if (assets == 0) revert ZeroAssets();
-        shares = previewDeposit(assets);
-        if (shares == 0) revert ZeroShares();
 
         accrueInternal();
-        updateTrackingIndex(receiver);
+        // updateTrackingIndex(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
-        int104 principalChange = comet.userBasic(address(this)).principal - prevPrincipal;
-        userBasic[receiver].principal += unsigned104(principalChange);
-        underlyingPrincipal += unsigned104(principalChange);
-
+        shares = unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
+        if (shares == 0) revert ZeroShares();
         _mint(receiver, shares);
 
         emit Deposit(msg.sender, receiver, assets, shares);
@@ -78,17 +74,14 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return assets The amount of assets that are deposited by the caller
     function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
         if (shares == 0) revert ZeroShares();
-        assets = previewMint(shares);
+        assets = convertToAssets(shares);
         if (assets == 0) revert ZeroAssets();
 
         accrueInternal();
-        updateTrackingIndex(receiver);
+        // updateTrackingIndex(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
-        int104 principalChange = comet.userBasic(address(this)).principal - prevPrincipal;
-        userBasic[receiver].principal += unsigned104(principalChange);
-        underlyingPrincipal += unsigned104(principalChange);
-
+        shares =  unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
         _mint(receiver, shares);
 
         emit Deposit(msg.sender, receiver, assets, shares);
@@ -102,9 +95,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return shares The amount of shares of the owner that are burned
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
         if (assets == 0) revert ZeroAssets();
-        shares = previewWithdraw(assets);
-        if (shares == 0) revert ZeroShares();
-
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender];
 
@@ -112,14 +102,13 @@ contract CometWrapper is ERC4626, CometHelpers {
         }
 
         accrueInternal();
-        updateTrackingIndex(owner);
-        _burn(owner, shares);
+        // updateTrackingIndex(owner);
 
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
-        int104 principalChange = prevPrincipal - comet.userBasic(address(this)).principal;
-        userBasic[owner].principal -= unsigned104(principalChange);
-        underlyingPrincipal -= unsigned104(principalChange);
+        shares =  unsigned256(prevPrincipal - comet.userBasic(address(this)).principal);
+        if (shares == 0) revert ZeroShares();
+        _burn(owner, shares);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -137,20 +126,14 @@ contract CometWrapper is ERC4626, CometHelpers {
 
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
-
-        assets = previewRedeem(shares);
+        assets = convertToAssets(shares);
         if (assets == 0) revert ZeroAssets();
+        _burn(owner, shares);
         
 
         accrueInternal();
-        updateTrackingIndex(owner);
-        _burn(owner, shares);
-
-        int104 prevPrincipal = comet.userBasic(address(this)).principal;
+        // updateTrackingIndex(owner);
         asset.safeTransfer(receiver, assets);
-        int104 principalChange = prevPrincipal - comet.userBasic(address(this)).principal;
-        userBasic[owner].principal -= unsigned104(principalChange);
-        underlyingPrincipal -= unsigned104(principalChange);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -183,8 +166,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         if (amount == 0) revert ZeroTransfer();
         balanceOf[from] -= amount;
 
-        updateTransferPrincipals(from, to, amount);
-
         unchecked {
             balanceOf[to] += amount;
         }
@@ -216,14 +197,6 @@ contract CometWrapper is ERC4626, CometHelpers {
         }
         basic.baseTrackingIndex = trackingSupplyIndex;
         userBasic[account] = basic;
-    }
-
-    function updateTransferPrincipals(address from, address to, uint256 shares) internal {
-        uint256 _totalAssets = totalAssets();
-        uint256 assets = convertToAssets(shares);
-        uint104 principalChange = safe104(assets * underlyingPrincipal / _totalAssets);
-        userBasic[from].principal -= principalChange;
-        userBasic[to].principal += principalChange;
     }
 
     /// @dev Converts the `principal` to `balance` before adding the signed balance change. The new balance
@@ -347,11 +320,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @param account The address to be queried
     /// @return The maximum amount that can be withdrawn from given account
     function maxWithdraw(address account) public view override returns (uint256) {
-        uint256 principal = userBasic[account].principal;
-        if (principal == 0) {
-            return 0;            
-        }
-
         uint256 maxShares = maxRedeem(account);
         return convertToAssets(maxShares);
     }
@@ -361,18 +329,14 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @param account The address to be queried
     /// @return The maximum amount that can be withdrawn from given account
     function maxRedeem(address account) public view override returns (uint256) {
-        uint256 principal = userBasic[account].principal;
-        if (principal == 0) {
-            return 0;            
-        }
-        uint64 baseSupplyIndex_ = accruedSupplyIndex();        
-        uint256 assets = presentValueSupply(baseSupplyIndex_, principal);
-        uint256 balance = balanceOf[account];
-        uint256 maxShares = convertToShares(assets);
-        if (balance < maxShares) {
-            return balance;
-        } else {
-            return maxShares;
-        }
+        uint256 shares = balanceOf[account];
+        if (shares == 0) return 0;
+        uint256 contractPrincipal = unsigned256(comet.userBasic(address(this)).principal);
+        return contractPrincipal < shares ? contractPrincipal : shares;
+    }
+
+    function convertToAssets(uint256 shares) public view override returns (uint256) {
+        uint64 baseSupplyIndex_ = accruedSupplyIndex();
+        return shares > 0 ? presentValueSupply(baseSupplyIndex_, shares) : 0;
     }
 }

@@ -2,12 +2,13 @@
 pragma solidity 0.8.17;
 
 import {BaseTest, CometHelpers, CometWrapper, ERC20, ICometRewards} from "./BaseTest.sol";
+import {CometMath} from "../src/vendor/CometMath.sol";
 
-contract CometWrapperInvariantTest is BaseTest {
+contract CometWrapperInvariantTest is BaseTest, CometMath {
     // Invariants:
     // - totalAssets must always be <= comet.balanceOf(address(cometWrapper))
     // - sum of all underlyingBalances of accounts <= totalAssets
-    // - sum of principal of all users == underlyingPrincipal
+    // - sum of user balances == cometWrapper's principal in comet
     function test__contractBalanceInvariants(uint256 amount1, uint256 amount2) public {
         vm.assume(amount1 <= 2**48);
         vm.assume(amount2 <= 2**48);
@@ -45,7 +46,7 @@ contract CometWrapperInvariantTest is BaseTest {
         vm.stopPrank();
         assertEq(comet.balanceOf(address(cometWrapper)), cometWrapper.totalAssets());
 
-        assertEq(cometWrapper.userPrincipal(alice) + cometWrapper.userPrincipal(bob), uint104(comet.userBasic(address(cometWrapper)).principal));
+        assertEq(cometWrapper.balanceOf(alice) + cometWrapper.balanceOf(bob), unsigned256(comet.userBasic(address(cometWrapper)).principal));
 
         vm.startPrank(alice);
         cometWrapper.redeem(cometWrapper.maxRedeem(alice), alice, alice);
