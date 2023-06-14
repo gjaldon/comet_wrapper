@@ -3,5 +3,6 @@
   "solidity.packageDefaultDependenciesDirectory": "lib",
   "solidity.packageDefaultDependenciesContractsDirectory": "src",
   "diffEditor.ignoreTrimWhitespace": false,
-  "editor.trimAutoWhitespace": true
+  "editor.trimAutoWhitespace": true,
+  "solidity.compileUsingRemoteVersion": "v0.8.17+commit.8df45f5f"
 }
