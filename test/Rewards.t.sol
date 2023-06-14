@@ -111,6 +111,26 @@ contract RewardsTest is BaseTest {
         assertGt(baseTrackingAccrued, 0);
     }
 
+    function test__accrueRewardsOnTransfer() public {
+        enableRewardsAccrual();
+
+        vm.prank(cusdcHolder);
+        comet.transfer(alice, 20_000e6);
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.deposit(10_000e6, alice);
+        vm.stopPrank();
+
+        skip(30 days);
+        vm.prank(alice);
+        cometWrapper.transfer(bob, 5_000e6);
+
+        // Alice should have 30 days worth of accrued rewards for her 10K WcUSDC
+        assertApproxEqAbs(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed, 1000);
+        // Bob should have no rewards accrued yet since his balance prior to the transfer was 0
+        assertEq(cometWrapper.getRewardOwed(bob), 0);
+    }
+
     function enableRewardsAccrual() internal {
         address governor = comet.governor();
         ICometConfigurator configurator = ICometConfigurator(configuratorAddress);

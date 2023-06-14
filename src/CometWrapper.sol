@@ -54,8 +54,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
         if (assets == 0) revert ZeroAssets();
 
-        accrueInternal();
-        updateTrackingIndex(receiver);
+        accrueInternal(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
         shares = unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
@@ -74,8 +73,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         assets = convertToAssets(shares);
         if (assets == 0) revert ZeroAssets();
 
-        accrueInternal();
-        updateTrackingIndex(receiver);
+        accrueInternal(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
         shares =  unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
@@ -98,9 +96,7 @@ contract CometWrapper is ERC4626, CometHelpers {
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
 
-        accrueInternal();
-        updateTrackingIndex(owner);
-
+        accrueInternal(owner);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
         shares =  unsigned256(prevPrincipal - comet.userBasic(address(this)).principal);
@@ -128,8 +124,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         _burn(owner, shares);
         
 
-        accrueInternal();
-        updateTrackingIndex(owner);
+        accrueInternal(owner);
         asset.safeTransfer(receiver, assets);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
@@ -161,8 +156,13 @@ contract CometWrapper is ERC4626, CometHelpers {
 
     function transferInternal(address from, address to, uint256 amount) internal {
         if (amount == 0) revert ZeroTransfer();
-        balanceOf[from] -= amount;
 
+        // Accrue rewards before transferring assets
+        comet.accrueAccount(address(this));
+        updateTrackingIndex(from);
+        updateTrackingIndex(to);
+
+        balanceOf[from] -= amount;
         unchecked {
             balanceOf[to] += amount;
         }
@@ -196,8 +196,9 @@ contract CometWrapper is ERC4626, CometHelpers {
         userBasic[account] = basic;
     }
 
-    function accrueInternal() internal {
+    function accrueInternal(address account) internal {
         comet.accrueAccount(address(this));
+        updateTrackingIndex(account);
     }
 
     /// @notice Get the reward owed to an account
