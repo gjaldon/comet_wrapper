@@ -119,11 +119,21 @@ contract CometWrapper is ERC4626, CometHelpers {
 
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
-        assets = convertToAssets(shares);
+        // Asset transfers in Comet may lead to decrease of this contract's principal/shares by 1 more than the 
+        // `shares` argument. Taking into account this quirk in Comet's transfer logic, we always decrease `shares`
+        // by 1 before converting to assets and doing the transfer. We then proceed to burn the actual `shares` amount
+        // that was decreased during the Comet transfer. 
+        // In this way, any rounding error would be in favor of CometWrapper and CometWrapper will be protected
+        // from insolvency due to lack of assets that can be withdrawn by users.
+        assets = convertToAssets(shares-1);
         if (assets == 0) revert ZeroAssets();
+
         accrueInternal(owner);
-        _burn(owner, shares);
+        int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
+        shares =  unsigned256(prevPrincipal - comet.userBasic(address(this)).principal);
+        if (shares == 0) revert ZeroShares();
+        _burn(owner, shares);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -304,10 +314,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @param account The address to be queried
     /// @return The maximum amount that can be withdrawn from given account
     function maxRedeem(address account) public view override returns (uint256) {
-        uint256 shares = balanceOf[account];
-        if (shares == 0) return 0;
-        uint256 contractPrincipal = unsigned256(comet.userBasic(address(this)).principal);
-        return contractPrincipal < shares ? contractPrincipal : shares;
+        return balanceOf[account];
     }
 
     function convertToAssets(uint256 shares) public view override returns (uint256) {

@@ -13,6 +13,12 @@ This wrapped token allows other protocols to more easily integrate with Compound
 
 To nullify inflation attacks, `CometWrapper` maintains internal accounting of all Compound III tokens deposited and withdrawn. This internal accounting only gets updated through the functions `mint`, `redeem`, `deposit` and `withdraw`. This means that any direct transfer of Compound III tokens will not be recognized by the `CometWrapper` contract to prevent malicious actors from manipulating the exchange rate of Wrapped Compound III token to the actual Compound III token. The tradeoff is that any tokens directly transferred to `CometWrapper` will be forever locked and unrecoverable.
 
+### Shares Redemption
+
+When doing Comet transfers, Comet may decrease sender's principal by 1 more than the specified amount in favor of the receiver. To take into account this quirk of Comet transfers, this CometWrapper will always transfer assets worth `shares - 1` and burn `shares` amount when calling `redeem`. 
+
+In this way, any rounding error would be in favor of CometWrapper and at the expense of users. The loss for users is negligible since it is only 1 unit of Wrapped cUSDCv3. However, this serves as protection against insolvency for CometWrapper so that it nevers ends up in a state where users' total shares is greater than the total supply of Wrapped cUSDCv3. Note that the loss of 1 share does not always happen for every redeem and in some cases the decrease in shares for the user and the contract is equal. 
+
 ## Usage
 
 `CometWrapper` implements the ERC4626 Tokenized Vault Standard and is used like any other ERC4626 contracts.
