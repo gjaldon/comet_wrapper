@@ -111,16 +111,11 @@ contract RewardsTest is BaseTest {
         assertGt(baseTrackingAccrued, 0);
     }
 
-    function test__accrueRewardsOnTransfer() public {
+    function test__accrueRewardsBeforeBalanceChanges() public {
         enableRewardsAccrual();
+        uint256 snapshot = vm.snapshot();
 
-        vm.prank(cusdcHolder);
-        comet.transfer(alice, 20_000e6);
-        vm.startPrank(alice);
-        comet.allow(wrapperAddress, true);
-        cometWrapper.deposit(10_000e6, alice);
-        vm.stopPrank();
-
+        setupAliceBalance();
         skip(30 days);
         vm.prank(alice);
         cometWrapper.transfer(bob, 5_000e6);
@@ -129,6 +124,59 @@ contract RewardsTest is BaseTest {
         assertApproxEqAbs(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed, 1000);
         // Bob should have no rewards accrued yet since his balance prior to the transfer was 0
         assertEq(cometWrapper.getRewardOwed(bob), 0);
+
+        vm.revertTo(snapshot);
+        snapshot = vm.snapshot();
+
+        setupAliceBalance();
+        skip(30 days);
+        vm.prank(alice);
+        cometWrapper.redeem(5_000e6, alice, alice);
+
+        // Alice should have 30 days worth of accrued rewards for her 10K WcUSDC and not for 5K WcUSDC
+        assertApproxEqAbs(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed, 1000);
+
+        vm.revertTo(snapshot);
+        snapshot = vm.snapshot();
+
+        setupAliceBalance();
+        skip(30 days);
+        vm.prank(alice);
+        cometWrapper.withdraw(5_000e6, alice, alice);
+
+        // Alice should have 30 days worth of accrued rewards for her 10K WcUSDC and not for 5K WcUSDC
+        assertApproxEqAbs(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed, 1000);
+
+        vm.revertTo(snapshot);
+        snapshot = vm.snapshot();
+
+        setupAliceBalance();
+        skip(30 days);
+        vm.prank(alice);
+        cometWrapper.mint(5_000e6, alice);
+
+        // Alice should have 30 days worth of accrued rewards for her 10K WcUSDC and not for 5K WcUSDC
+        assertApproxEqAbs(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed, 1000);
+        
+        vm.revertTo(snapshot);
+        snapshot = vm.snapshot();
+
+        setupAliceBalance();
+        skip(30 days);
+        vm.prank(alice);
+        cometWrapper.deposit(5_000e6, alice);
+
+        // Alice should have 30 days worth of accrued rewards for her 10K WcUSDC and not for 5K WcUSDC
+        assertApproxEqAbs(cometWrapper.getRewardOwed(alice), cometRewards.getRewardOwed(cometAddress, alice).owed, 1000);
+    }
+
+    function setupAliceBalance() internal {
+        vm.prank(cusdcHolder);
+        comet.transfer(alice, 20_000e6);
+        vm.startPrank(alice);
+        comet.allow(wrapperAddress, true);
+        cometWrapper.deposit(10_000e6, alice);
+        vm.stopPrank();
     }
 
     function enableRewardsAccrual() internal {
