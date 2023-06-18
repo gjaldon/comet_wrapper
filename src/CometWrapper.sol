@@ -190,6 +190,9 @@ contract CometWrapper is ERC4626, CometHelpers {
         return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
     }
 
+    /// @dev Updates an account's `baseTrackingAccrued` which keeps track of rewards accrued by the account.
+    /// This uses the latest `trackingSupplyIndex` from Comet to compute for rewards accrual for accounts
+    /// that supply the base asset to Comet.
     function updateTrackingIndex(address account) internal {
         UserBasic memory basic = userBasic[account];
         uint256 principal = balanceOf[account];
@@ -300,25 +303,40 @@ contract CometWrapper is ERC4626, CometHelpers {
         lastAccrualTime_ = totals.lastAccrualTime;
     }
 
-    /// @notice Maximum amount that can be withdrawn
-    /// @dev Maximum assets that can be withdrawn will not always match user's assets balance and may be less.
-    /// @param account The address to be queried
-    /// @return The maximum amount that can be withdrawn from given account
-    function maxWithdraw(address account) public view override returns (uint256) {
-        uint256 maxShares = maxRedeem(account);
-        return convertToAssets(maxShares);
-    }
-
-    /// @notice Maximum amount that can be redeemed
-    /// @dev Maximum shares that can be redeemed will not always match user's shares balance and may be less.
-    /// @param account The address to be queried
-    /// @return The maximum amount that can be withdrawn from given account
-    function maxRedeem(address account) public view override returns (uint256) {
-        return balanceOf[account];
-    }
-
+    /// @notice Returns the amount of assets that the Vault would exchange for the amount of shares provided, in an ideal
+    /// scenario where all the conditions are met.
+    /// @dev Treats shares as principal and computes for assets by taking into account interest accrual. Relies on latest
+    /// `baseSupplyIndex` from Comet which is the global index used for interest accrual the from supply rate. 
+    /// @param shares The amount of shares to be converted to assets
+    /// @return The total amount of assets computed from the given shares
     function convertToAssets(uint256 shares) public view override returns (uint256) {
         uint64 baseSupplyIndex_ = accruedSupplyIndex();
         return shares > 0 ? presentValueSupply(baseSupplyIndex_, shares) : 0;
+    }
+
+    /// @notice Returns the amount of shares that the Vault would exchange for the amount of assets provided, in an ideal
+    /// scenario where all the conditions are met.
+    /// @dev Assets are converted to shares by computing for the principal using the latest `baseSupplyIndex` from Comet.
+    /// @param assets The amount of assets to be converted to shares
+    /// @return The total amount of shares computed from the given assets
+    function convertToShares(uint256 assets) public view override returns (uint256) {
+        uint64 baseSupplyIndex_ = accruedSupplyIndex();
+        return assets > 0 ? principalValueSupply(baseSupplyIndex_, assets) : 0;
+    }
+
+    /// @notice Allows an on-chain or off-chain user to simulate the effects of their mint at the current block, given
+    /// current on-chain conditions.
+    /// @param shares The amount of shares to be converted to assets
+    /// @return The total amount of assets required to mint the given shares
+    function previewMint(uint256 shares) public view override returns (uint256) {
+        return convertToAssets(shares);
+    }
+
+    /// @notice Allows an on-chain or off-chain user to simulate the effects of their withdrawal at the current block,
+    /// given current on-chain conditions.
+    /// @param assets The amount of assets to be converted to shares
+    /// @return The total amount of shares required to withdraw the given assets
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        return convertToShares(assets);
     }
 }
