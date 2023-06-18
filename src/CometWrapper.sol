@@ -121,10 +121,8 @@ contract CometWrapper is ERC4626, CometHelpers {
         }
         assets = convertToAssets(shares);
         if (assets == 0) revert ZeroAssets();
-        _burn(owner, shares);
-        
-
         accrueInternal(owner);
+        _burn(owner, shares);
         asset.safeTransfer(receiver, assets);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
