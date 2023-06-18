@@ -207,6 +207,10 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return The total amount of rewards owed to an account
     function getRewardOwed(address account) external returns (uint256) {
         ICometRewards.RewardConfig memory config = cometRewards.rewardConfig(address(comet));
+        return getRewardOwedInternal(config, account);
+    }
+
+    function getRewardOwedInternal(ICometRewards.RewardConfig memory config, address account) internal returns (uint256) {
         UserBasic memory basic = accrueRewards(account);
         uint256 claimed = rewardsClaimed[account];
         uint256 accrued = basic.baseTrackingAccrued;
@@ -227,22 +231,11 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @param to The address that will receive the rewards
     function claimTo(address to) external {
         address from = msg.sender;
-        UserBasic memory basic = accrueRewards(from);
         ICometRewards.RewardConfig memory config = cometRewards.rewardConfig(address(comet));
+        uint256 owed = getRewardOwedInternal(config, from);
 
-        uint256 claimed = rewardsClaimed[from];
-        uint256 accrued = basic.baseTrackingAccrued;
-
-        if (config.shouldUpscale) {
-            accrued *= config.rescaleFactor;
-        } else {
-            accrued /= config.rescaleFactor;
-        }
-
-        if (accrued > claimed) {
-            uint256 owed = accrued - claimed;
-            rewardsClaimed[from] = accrued;
-
+        if (owed != 0) {
+            rewardsClaimed[from] += owed;
             emit RewardClaimed(from, to, config.token, owed);
             cometRewards.claimTo(address(comet), address(this), address(this), true);
             ERC20(config.token).safeTransfer(to, owed);
