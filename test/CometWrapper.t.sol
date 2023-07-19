@@ -182,15 +182,24 @@ contract CometWrapperTest is BaseTest, CometMath {
         vm.stopPrank();
     }
 
-    function test__redeem() public {
+    function test__redeem(uint256 amount1, uint256 amount2) public {
+        amount1 = bound(amount1, 5, 10_000e6);
+        amount2 = bound(amount2, 5, 10_000e6);
+
+        vm.prank(cusdcHolder);
+        comet.transfer(alice, 10_000e6);
+
+        vm.prank(cusdcHolder);
+        comet.transfer(bob, 10_000e6);
+
         vm.startPrank(alice);
         comet.allow(wrapperAddress, true);
-        cometWrapper.mint(9_000e6, alice);
+        cometWrapper.deposit(amount1, alice);
         vm.stopPrank();
 
         vm.startPrank(bob);
         comet.allow(wrapperAddress, true);
-        cometWrapper.mint(7_777e6, bob);
+        cometWrapper.deposit(amount2, bob);
         vm.stopPrank();
 
         assertEq(cometWrapper.totalSupply(), unsigned104(comet.userBasic(wrapperAddress).principal));
@@ -205,6 +214,9 @@ contract CometWrapperTest is BaseTest, CometMath {
         vm.startPrank(bob);
         cometWrapper.redeem(cometWrapper.maxRedeem(bob), bob, bob);
         vm.stopPrank();
+
+        assertEq(cometWrapper.totalSupply(), unsigned104(comet.userBasic(wrapperAddress).principal));
+        assertEq(cometWrapper.totalAssets(), comet.balanceOf(wrapperAddress));
     }
 
     function test__disallowZeroSharesOrAssets() public {
