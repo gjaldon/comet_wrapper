@@ -163,8 +163,6 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function transferInternal(address from, address to, uint256 amount) internal {
-        if (amount == 0) revert ZeroTransfer();
-
         // Accrue rewards before transferring assets
         comet.accrueAccount(address(this));
         updateTrackingIndex(from);
