@@ -54,8 +54,7 @@ contract CometWrapper is ERC4626, CometHelpers {
     function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
         if (assets == 0) revert ZeroAssets();
 
-        accrueInternal();
-        updateTrackingIndex(receiver);
+        accrueInternal(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
         shares = unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
@@ -74,8 +73,7 @@ contract CometWrapper is ERC4626, CometHelpers {
         assets = convertToAssets(shares);
         if (assets == 0) revert ZeroAssets();
 
-        accrueInternal();
-        updateTrackingIndex(receiver);
+        accrueInternal(receiver);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransferFrom(msg.sender, address(this), assets);
         shares =  unsigned256(comet.userBasic(address(this)).principal - prevPrincipal);
@@ -98,9 +96,7 @@ contract CometWrapper is ERC4626, CometHelpers {
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
 
-        accrueInternal();
-        updateTrackingIndex(owner);
-
+        accrueInternal(owner);
         int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
         shares =  unsigned256(prevPrincipal - comet.userBasic(address(this)).principal);
@@ -123,14 +119,21 @@ contract CometWrapper is ERC4626, CometHelpers {
 
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
-        assets = convertToAssets(shares);
+        // Asset transfers in Comet may lead to decrease of this contract's principal/shares by 1 more than the 
+        // `shares` argument. Taking into account this quirk in Comet's transfer logic, we always decrease `shares`
+        // by 1 before converting to assets and doing the transfer. We then proceed to burn the actual `shares` amount
+        // that was decreased during the Comet transfer. 
+        // In this way, any rounding error would be in favor of CometWrapper and CometWrapper will be protected
+        // from insolvency due to lack of assets that can be withdrawn by users.
+        assets = convertToAssets(shares-1);
         if (assets == 0) revert ZeroAssets();
-        _burn(owner, shares);
-        
 
-        accrueInternal();
-        updateTrackingIndex(owner);
+        accrueInternal(owner);
+        int104 prevPrincipal = comet.userBasic(address(this)).principal;
         asset.safeTransfer(receiver, assets);
+        shares =  unsigned256(prevPrincipal - comet.userBasic(address(this)).principal);
+        if (shares == 0) revert ZeroShares();
+        _burn(owner, shares);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -160,9 +163,12 @@ contract CometWrapper is ERC4626, CometHelpers {
     }
 
     function transferInternal(address from, address to, uint256 amount) internal {
-        if (amount == 0) revert ZeroTransfer();
-        balanceOf[from] -= amount;
+        // Accrue rewards before transferring assets
+        comet.accrueAccount(address(this));
+        updateTrackingIndex(from);
+        updateTrackingIndex(to);
 
+        balanceOf[from] -= amount;
         unchecked {
             balanceOf[to] += amount;
         }
@@ -182,6 +188,9 @@ contract CometWrapper is ERC4626, CometHelpers {
         return principal > 0 ? presentValueSupply(baseSupplyIndex_, principal) : 0;
     }
 
+    /// @dev Updates an account's `baseTrackingAccrued` which keeps track of rewards accrued by the account.
+    /// This uses the latest `trackingSupplyIndex` from Comet to compute for rewards accrual for accounts
+    /// that supply the base asset to Comet.
     function updateTrackingIndex(address account) internal {
         UserBasic memory basic = userBasic[account];
         uint256 principal = balanceOf[account];
@@ -196,8 +205,9 @@ contract CometWrapper is ERC4626, CometHelpers {
         userBasic[account] = basic;
     }
 
-    function accrueInternal() internal {
+    function accrueInternal(address account) internal {
         comet.accrueAccount(address(this));
+        updateTrackingIndex(account);
     }
 
     /// @notice Get the reward owed to an account
@@ -208,6 +218,10 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @return The total amount of rewards owed to an account
     function getRewardOwed(address account) external returns (uint256) {
         ICometRewards.RewardConfig memory config = cometRewards.rewardConfig(address(comet));
+        return getRewardOwedInternal(config, account);
+    }
+
+    function getRewardOwedInternal(ICometRewards.RewardConfig memory config, address account) internal returns (uint256) {
         UserBasic memory basic = accrueRewards(account);
         uint256 claimed = rewardsClaimed[account];
         uint256 accrued = basic.baseTrackingAccrued;
@@ -228,22 +242,11 @@ contract CometWrapper is ERC4626, CometHelpers {
     /// @param to The address that will receive the rewards
     function claimTo(address to) external {
         address from = msg.sender;
-        UserBasic memory basic = accrueRewards(from);
         ICometRewards.RewardConfig memory config = cometRewards.rewardConfig(address(comet));
+        uint256 owed = getRewardOwedInternal(config, from);
 
-        uint256 claimed = rewardsClaimed[from];
-        uint256 accrued = basic.baseTrackingAccrued;
-
-        if (config.shouldUpscale) {
-            accrued *= config.rescaleFactor;
-        } else {
-            accrued /= config.rescaleFactor;
-        }
-
-        if (accrued > claimed) {
-            uint256 owed = accrued - claimed;
-            rewardsClaimed[from] = accrued;
-
+        if (owed != 0) {
+            rewardsClaimed[from] += owed;
             emit RewardClaimed(from, to, config.token, owed);
             cometRewards.claimTo(address(comet), address(this), address(this), true);
             ERC20(config.token).safeTransfer(to, owed);
@@ -298,28 +301,40 @@ contract CometWrapper is ERC4626, CometHelpers {
         lastAccrualTime_ = totals.lastAccrualTime;
     }
 
-    /// @notice Maximum amount that can be withdrawn
-    /// @dev Maximum assets that can be withdrawn will not always match user's assets balance and may be less.
-    /// @param account The address to be queried
-    /// @return The maximum amount that can be withdrawn from given account
-    function maxWithdraw(address account) public view override returns (uint256) {
-        uint256 maxShares = maxRedeem(account);
-        return convertToAssets(maxShares);
-    }
-
-    /// @notice Maximum amount that can be redeemed
-    /// @dev Maximum shares that can be redeemed will not always match user's shares balance and may be less.
-    /// @param account The address to be queried
-    /// @return The maximum amount that can be withdrawn from given account
-    function maxRedeem(address account) public view override returns (uint256) {
-        uint256 shares = balanceOf[account];
-        if (shares == 0) return 0;
-        uint256 contractPrincipal = unsigned256(comet.userBasic(address(this)).principal);
-        return contractPrincipal < shares ? contractPrincipal : shares;
-    }
-
+    /// @notice Returns the amount of assets that the Vault would exchange for the amount of shares provided, in an ideal
+    /// scenario where all the conditions are met.
+    /// @dev Treats shares as principal and computes for assets by taking into account interest accrual. Relies on latest
+    /// `baseSupplyIndex` from Comet which is the global index used for interest accrual the from supply rate. 
+    /// @param shares The amount of shares to be converted to assets
+    /// @return The total amount of assets computed from the given shares
     function convertToAssets(uint256 shares) public view override returns (uint256) {
         uint64 baseSupplyIndex_ = accruedSupplyIndex();
         return shares > 0 ? presentValueSupply(baseSupplyIndex_, shares) : 0;
+    }
+
+    /// @notice Returns the amount of shares that the Vault would exchange for the amount of assets provided, in an ideal
+    /// scenario where all the conditions are met.
+    /// @dev Assets are converted to shares by computing for the principal using the latest `baseSupplyIndex` from Comet.
+    /// @param assets The amount of assets to be converted to shares
+    /// @return The total amount of shares computed from the given assets
+    function convertToShares(uint256 assets) public view override returns (uint256) {
+        uint64 baseSupplyIndex_ = accruedSupplyIndex();
+        return assets > 0 ? principalValueSupply(baseSupplyIndex_, assets) : 0;
+    }
+
+    /// @notice Allows an on-chain or off-chain user to simulate the effects of their mint at the current block, given
+    /// current on-chain conditions.
+    /// @param shares The amount of shares to be converted to assets
+    /// @return The total amount of assets required to mint the given shares
+    function previewMint(uint256 shares) public view override returns (uint256) {
+        return convertToAssets(shares);
+    }
+
+    /// @notice Allows an on-chain or off-chain user to simulate the effects of their withdrawal at the current block,
+    /// given current on-chain conditions.
+    /// @param assets The amount of assets to be converted to shares
+    /// @return The total amount of shares required to withdraw the given assets
+    function previewWithdraw(uint256 assets) public view override returns (uint256) {
+        return convertToShares(assets);
     }
 }
