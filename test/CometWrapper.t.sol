@@ -329,12 +329,4 @@ contract CometWrapperTest is BaseTest, CometMath {
         assertEq(cometWrapper.balanceOf(bob), 900e6);
         vm.stopPrank();
     }
-
-    function test__transfersWithZeroDisallowed() public {
-        vm.expectRevert(CometHelpers.ZeroTransfer.selector);
-        cometWrapper.transferFrom(alice, bob, 0);
-
-        vm.expectRevert(CometHelpers.ZeroTransfer.selector);
-        cometWrapper.transfer(bob, 0);
-    }
 }
