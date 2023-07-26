@@ -2,6 +2,18 @@
 
 A wrapped token for any of the Compound III tokens.
 
+## Deployments
+
+| Network  | Base Asset | CometWrapper Address                       |
+| -------- | ---------- | ------------------------------------------ |
+| Mainnet  | USDC       | 0xfd55fcd10d7de6c6205dbba45c4aa67d547ad8f2 |
+| Mainnet  | WETH       | Upcoming                                   |
+| Polygon  | USDC       | Upcoming                                   |
+| Arbitrum | USDC       | Upcoming                                   |
+| Avalance | USDC       | Upcoming                                   |
+| Base     | USDC       | Upcoming                                   |
+| Base     | WETH       | Upcoming                                   |
+
 ## Overview
 
 Compound III tokens like cUSDCv3 and cWETHv3 are rebasing tokens. Protocols are designed to work with tokens that do not automatically increase balances like rebasing tokens do. The standard solution to this problem is to use a wrapped token.
