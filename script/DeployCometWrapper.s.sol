@@ -25,8 +25,8 @@ contract DeployCometWrapper is Script {
     function run() public {
         cometAddr = vm.envAddress("COMET_ADDRESS");
         rewardsAddr = vm.envAddress("REWARDS_ADDRESS");
-        tokenName = vm.envString("TOKEN_NAME");
-        tokenSymbol = vm.envString("TOKEN_SYMBOL");
+        tokenName = vm.envString("TOKEN_NAME");       // Wrapped Comet WETH || Wrapped Comet USDC
+        tokenSymbol = vm.envString("TOKEN_SYMBOL");     // WcWETHv3 || WcUSDCv3
         vm.startBroadcast();
 
         console.log("=============================================================");
