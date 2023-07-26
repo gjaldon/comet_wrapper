@@ -6,8 +6,8 @@ A wrapped token for any of the Compound III tokens.
 
 | Network  | Base Asset | CometWrapper Address                       |
 | -------- | ---------- | ------------------------------------------ |
-| Mainnet  | USDC       | 0xfd55fcd10d7de6c6205dbba45c4aa67d547ad8f2 |
-| Mainnet  | WETH       | Upcoming                                   |
+| Mainnet  | USDC       | 0xFd55fCd10d7De6C6205dBBa45C4aA67d547AD8F2 |
+| Mainnet  | WETH       | 0xCA61945467371e534aFd26302D48D9A9E7dCb814 |
 | Polygon  | USDC       | Upcoming                                   |
 | Arbitrum | USDC       | Upcoming                                   |
 | Avalance | USDC       | Upcoming                                   |
