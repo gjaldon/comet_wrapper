@@ -49,7 +49,11 @@ To wrap a Compound III token like cUSDCv3, you will need to have cUSDCv3 balance
 
 ### Withdrawing Tokens
 
-To witdhraw a Compound III token like cUSDCv3, you may use either `withdraw` or `redeem`. For example:
+To withdraw a Compound III token like cUSDCv3, you may use either `withdraw` or `redeem`. For example:
 
 - `cometWrapper.withdraw(amount, receiver, owner)` - `amount` is the number of Compound III tokens to be withdrawn. You can only withdraw tokens that you deposited.
 - `cometWrapper.redeem(amount, receiver, owner)` - `amount` is the number of Wrapped Compound III tokens to be redeemed in exchange for the deposited Compound III tokens.
+
+### Claiming Rewards
+
+Comet tokens deposited in CometWrapper will continue to accrue rewards if reward accrual is enabled in Comet. CometWrapper keeps track of users' rewards and users would earn rewards as they would in Comet. The only difference is in claiming of the rewards. Instead of claiming rewards from the CometRewards contract, users will claim it from CometWrapper like so `cometWrapper.claimTo(alice)`.
